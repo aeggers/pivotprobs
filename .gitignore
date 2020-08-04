@@ -1,0 +1,9 @@
+.Rproj.user/
+.Rhistory
+.Rapp.history
+.Ruserdata
+vignettes/*.html
+vignettes/*.pdf
+*_cache/
+/cache/
+.Renviron
