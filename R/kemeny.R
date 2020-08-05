@@ -37,23 +37,40 @@ kemeny_piv_probs_simulation <- function(sims, tol = .01){
             (1 - b_over_c) > (1 - a_over_b) &
             # but just barely
             (1 - b_over_c) - (1 - a_over_b) < tol))/tol,
-    "AC_cycle" = mean( PICK UP HERE
+    "AC_cycle" = mean(
       (# forward cycle, and
         forward_cycle &
-          # b's loss to a worse than c's loss to a
-          (1 - a_over_c) > a_over_b &
-          # c's loss to a worse than a's loss to c
-          a_over_b > (1 - a_over_c) &
+          # b's loss to a worse than c's loss to b
+          a_over_b > b_over_c &
+          # c's loss to b worse than a's loss to c
+          b_over_c > (1 - a_over_c) &
           # but just barely
-          a_over_b - (1 - a_over_c) < tol) |
+          b_over_c - (1 - a_over_c) < tol) |
         (  # OR reverse cycle
           reverse_cycle &
-            # c's loss to a worse than a's loss to b
-            a_over_c > (1 - a_over_b) &
             # b's loss to c worse than a's loss to b
             (1 - b_over_c) > (1 - a_over_b) &
+            # a's loss to b worse than c's loss to a
+            (1 - a_over_b) > a_over_c &
             # but just barely
-            (1 - b_over_c) - (1 - a_over_b) < tol))/tol
+            (1 - a_over_b) - a_over_c < tol))/tol,
+    "BC_cycle" = mean(
+      (# forward cycle, and
+        forward_cycle &
+          # a's loss to c worse than b's loss to a
+          a_over_b > b_over_c &
+          # b's loss to a worse than c's loss to b
+          b_over_c > (1 - a_over_c) &
+          # but just barely
+          b_over_c - (1 - a_over_c) < tol) |
+        (  # OR reverse cycle
+          reverse_cycle &
+            # a's loss to b worse than c's loss to a
+            (1 - a_over_b) > a_over_c &
+            # c's loss to a worse than b's loss to c
+            a_over_c > (1 - b_over_c) &
+            # but just barely
+            a_over_c - (1 - b_over_c) < tol))/tol
   )
 
 }

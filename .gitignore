@@ -7,3 +7,4 @@ vignettes/*.pdf
 *_cache/
 /cache/
 .Renviron
+.DS_Store
