@@ -245,7 +245,8 @@ rgl::plot3d(x = for_plot$x, y = for_plot$y, z = for_plot$z, type = "p")
 
 # so we're in 2d, so incr^2 is the area.
 
-alpha_vec <- c(.4, .35, .2, .05)*40
+v_vec <- c(.4, .35, .2, .05)
+alpha_vec <- v_vec*40
 grid2 %>%
   mutate(ddir_555 = gtools::ddirichlet(as.matrix(.), alpha_vec)) %>%
   summarize(area = sum(ddir_555)*incr^2) -> out_ab
@@ -277,6 +278,31 @@ analytical/simulation_based
 # so ab and ac agree closely, bc less so, and ad not very much.
 # oh but hold up -- with more simulations it gets closer and closer. ad is very unlikely.
 # OK so I think that DOES work. cool.
+
+
+# for comparison, here is the simplicial cubature answer
+library(SimplicialCubature)
+f_dir <- function(x, v_vec = c(2, 1, 2)/5, s = 20){
+  gtools::ddirichlet(as.numeric(x), v_vec*s)
+}
+
+# assemble the surface
+mat_1 <- cbind(c(.5,.5,0,0), c(1/3,1/3,0, 1/3), c(1/3, 1/3, 1/3, 0))
+mat_2 <- cbind(c(1/3,1/3,0, 1/3), c(1/3, 1/3, 1/3, 0), rep(1/4, 4))
+ab_tie_array <- array(c(mat_1, mat_2), dim = c(4,3,2))
+tie_out_ab <- adaptIntegrateSimplex(f_dir, S = ab_tie_array, v_vec = v_vec, s = 20)
+# wow that does something. is it correct?
+tie_out_ac <- adaptIntegrateSimplex(f_dir, S = ab_tie_array, v_vec = v_vec[c(1,3,2,4)], s = 20)
+tie_out_ad <- adaptIntegrateSimplex(f_dir, S = ab_tie_array, v_vec = v_vec[c(1,4,2,3)], s = 20)
+tie_out_bc <- adaptIntegrateSimplex(f_dir, S = ab_tie_array, v_vec = v_vec[c(2,3,1,4)], s = 20)
+
+cubature <- c(tie_out_ab$integral, tie_out_ac$integral, tie_out_ad$integral, tie_out_bc$integral)
+names(cubature) <- c("ab", "ac", "ad", "bc")
+cubature/simulation_based
+analytical/simulation_based
+
+# so the cubature result does not look right-- my grid appraoch does get close to the simulation.
+
 
 # now we see if we can do it for borda count.
 
@@ -347,6 +373,7 @@ pps_analytical/unlist(pps)
 # but this grid is very fine-grained and it takes a long time to compute.
 # are the absolute levels wrong because I am getting the geometry wrong?
 
+
 # are the hypercubes really size incr^4? for this to be true, we would need the grid points to be a distance of incr from each other in each dimension. is that the case?
 
 library(patchwork)
@@ -362,6 +389,10 @@ p1 + p2 + p3
 # I can dimly see how this might happen. it only affects the ratios of course.
 
 ## So next steps: assess the method compared to direct MC. trading off speed and accuracy. need to consider edge cases, where I think the numerical approach will do better than direct Monte Carlo.
+
+# could also code up for Kemeny.
+
+## Also, think about adaptIntegrate etc. Maybe I can figure out what is wrong in the 4D plurality case, work out how to express the necessary area for Borda count or others, and apply their cool tricks to do this correctly.
 
 # need to stop on this.
 
