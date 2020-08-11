@@ -21,10 +21,15 @@ plurality_tie_grid <- function(increment = .025, k = 4){
 # example:
 # ptg5 <- plurality_tie_grid(k = 5, incr = .01)
 
+PTG_store <- list()
+
+# NB: this could be made not specific to Dirichlet.
 unnormalized_pivot_prob_from_ptg_and_alpha <- function(ptg, alpha){
   sum(gtools::ddirichlet(as.matrix(ptg), alpha))
 }
 
+# NB: this could be made not specific to Dirichlet.
+#' @export
 plurality_pivot_probs_grid_based <- function(alpha_vec, increment = .025, cand_names = NULL, sep = ""){
   if(is.null(cand_names)){
     cand_names <- names(alpha_vec)
@@ -33,7 +38,15 @@ plurality_pivot_probs_grid_based <- function(alpha_vec, increment = .025, cand_n
     stop("Must provide either cand_names argument or named alpha_vec.")
   }
   k <- length(alpha_vec)
-  ptg <- plurality_tie_grid(increment, k)
+  # TODO: allow for these to be stored so I don't have to regenerate.
+  this_ptg_name <- paste0("k_", k, "_increment_", increment)
+  if(this_ptg_name %in% names(PTG_store)){
+    # cat("using stored ptg!\n")
+    ptg <- PTG_store[[this_ptg_name]]
+  }else{
+    # cat("making ptg from scratch!\n")
+    PTG_store[[this_ptg_name]] <<- ptg <- plurality_tie_grid(increment, k)
+  }
   # cat(dim(ptg))
   out <- list()
   for(i in 1:(length(cand_names)-1)){
@@ -50,8 +63,13 @@ plurality_pivot_probs_grid_based <- function(alpha_vec, increment = .025, cand_n
 # example: plurality_pivot_probs_grid_based(alpha_vec*20, increment = .0025)
 
 # So implementation-wise this seems to be working.
-# next to do: compare with version based on approximation (used in Eggers and Vivyan), and simulation.
-# and if it's working, can apply to other methods.
+# There are more efficient ways to do this that take advantage of Dirichlet properties: the approximation in Eggers & Vivyan; probably also better to do something that takes advantage of Dirichlet properties (aggregation).
+# But this could be made not specific to Dirichlet.
+# TODO:
+  ## -- compare with version based on approximation (used in Eggers and Vivyan), and simulation.
+  ## -- provide a way to grab grids from storage so we don't have to make them over and over again.
+  ## -- apply to other methods -- this is the real key, as it's easier to do this than to rework the math for each case.
+  ## -- allow other distributions (non-Dirichlet), another attractive generalization
 
 
 # But:
