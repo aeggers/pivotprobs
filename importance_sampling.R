@@ -311,6 +311,7 @@ analytical/simulation_based
 # OTOH we do need to compute exactly below, and that gets slow if incr is small
 incr <- .01
 s <- .5
+# can make this more efficient by pruning progressively, e.g. expand ab and ba, take out ab + ba > 1, then expand further.
 expand_grid(
   ab = seq(0 + incr/2, 1 - incr/2, by = incr),
   ba = seq(0 + incr/2, 1 - incr/2, by = incr),
