@@ -1,5 +1,24 @@
 
-positional_piv_probs_simulation <- function(sims, tol = .01, s = .5){
+positional_piv_probs_simulation <- function(sims = NULL, alpha_vec = NULL, N = 100000, tol = .01, s = .5, cand_names = NULL, sep = ""){
+
+  if(is.null(sims)){
+    if(is.null(alpha_vec)){
+      stop("You need to pass either a matrix/df of simulations (sims) or a parameter vector to draw from a Dirichlet distribution.")
+    }
+    if(length(alpha_vec) != 6){
+      stop("The parameters for the Dirichlet draws need to be length 6.")
+    }
+    sims <- gtools::rdirichlet(N, alpha_vec)
+  }else if(ncol(sims) != 6){
+    stop("sims must have 6 columns.")
+  }
+
+  if(is.null(cand_names)){
+    cand_names <- names(sims)
+    if(is.null(cand_names)){
+      cand_names <- letters[1:3]
+    }
+  }
 
   # sims assumed to have columns abc, acb, bac, bca, cab, cba
   # each row is a simulation, i.e. a set of ballot shares
@@ -9,11 +28,15 @@ positional_piv_probs_simulation <- function(sims, tol = .01, s = .5){
   score_c <- sims[,5] + sims[,6] + s*(sims[,2] + sims[,4])
 
   # this is direct Monte Carlo -- nothing fancy
-  list(
-    "AB" = mean(score_a > score_b & score_a - score_b < tol & score_b > score_c)/tol,
-    "AC" = mean(score_a > score_c & score_a - score_c < tol & score_c > score_b)/tol,
-    "BC" = mean(score_b > score_c & score_b - score_c < tol & score_c > score_a)/tol
+  out <- list(
+    mean(score_a > score_b & score_a - score_b < tol & score_b > score_c)/tol,
+    mean(score_a > score_c & score_a - score_c < tol & score_c > score_b)/tol,
+    mean(score_b > score_c & score_b - score_c < tol & score_c > score_a)/tol
   )
+
+  names(out) <- c(paste0(cand_names[1], sep, cand_names[2]), paste0(cand_names[1], sep, cand_names[3]), paste0(cand_names[2], sep, cand_names[3]))
+
+  out
 
 }
 

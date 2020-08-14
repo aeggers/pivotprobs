@@ -1,7 +1,5 @@
 ## get dirichlet sims
 
-library(gtools)
-
 draw_dirichlet_sims <- function(N, v_vec, s){
 
   if(!sum(v_vec) == 1){

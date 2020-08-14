@@ -3,9 +3,51 @@
 
 # TODO: clean this up and compare to the grid version
 
+# alternative simulation biased
 
+plurality_pivot_probs_simulation_based <- function(sims = NULL, alpha = NULL, N = 100000, tol = .01, cand_names = NULL, sep = ""){
+
+  if(is.null(sims)){
+    if(is.null(alpha)){
+      stop("You need to pass either a matrix/df of simulations (sims) or a parameter vector to draw from a Dirichlet distribution.")
+    }
+    if(length(alpha) <= 2){
+      stop("We expect at least three candidates, but alpha has length ", length(alpha), ".\n", sep = "")
+    }
+    sims <- gtools::rdirichlet(N, alpha)
+  }else if(ncol(sims) != 6){
+    stop("sims must have 6 columns.")
+  }
+
+  if(is.null(cand_names)){
+    cand_names <- names(sims)
+    if(is.null(cand_names) & !is.null(alpha)){
+      cand_names <- names(alpha)
+      if(is.null(cand_names)){
+        cand_names <- letters[1:ncol(sims)]
+      }
+    }
+  }
+
+  out <- list()
+
+  row_max <- apply(sims, 1, max)
+
+  for(i in 1:(length(alpha)-1)){
+    for(j in (i+1):length(alpha)){
+      if(i >= j){next}
+      out[[paste0(cand_names[i], sep, cand_names[j])]] <- mean((sims[,i] == row_max | sims[,j] == row_max) & abs(sims[,i] - sims[,j]) < tol/2)/tol
+
+    }
+  }
+
+  out
+}
+
+# this was slow -- no longer needed
 # simulation based
 pivotal.probabilities = function(samp, tol = .01){
+  if(is.null(colnames(samp))){colnames(samp) <- letters[1:ncol(samp)]}
   rank.mat = t(apply(-samp, 1, rank)) # why is there a transpose?
   out <- list()
   for(i in 1:ncol(samp)){
