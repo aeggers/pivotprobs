@@ -1,0 +1,283 @@
+---
+title: "General approach to numerical integration for pivot probabilities"
+author: "Andy Eggers"
+date: "8/16/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+## Basic idea
+
+I am looking for a general approach to computing pivot probabilities. The ideal would be that I can specify linear equalities and inequalities definining the pivot event and any belief function and get back pivot probabilities.
+
+One building block is `SimplicialCubature`'s adaptive numerical integration routine. The challenge is that I have to specify an `S` array of simplicies over which to integrate the function.  
+
+A promising way to achieve this is the `geometry::delaunayn()` function, which takes as inputs the vertices of the pivot event in space and returns a tesseltation, in the form of a matrix with each row indicating a simplex in the form of a vector of indices from the input.
+
+So if I can generate vertices, `delaunayn()` can give me back elements I could shape into the `S` matrix for `SimplicialCubature::adaptIntegrateSimplex()`. 
+
+Let's do a demonstration for a simple case and then for a four-candidate plurality race. 
+
+Here is a quadrilateral in 2 dimensions: 
+
+```{r vertices_1}
+vertices <- rbind(c(0,0), 
+                  c(0,1),
+                  c(1,1),
+                  c(2,0))
+```
+We can plot this: 
+
+```{r plot_it}
+vertices %>% data.frame() %>% 
+  ggplot(aes(x = X1, y = X2)) + 
+  geom_polygon(alpha = .2) + 
+  geom_point()
+
+```
+
+Now we get the tesselation: 
+
+```{r tess_1}
+out <- geometry::delaunayn(vertices)
+out
+```
+
+And we can plot that: 
+
+```{r tess_plot}
+out %>% data.frame() %>% 
+  mutate(tess = letters[1:nrow(.)]) %>% 
+  pivot_longer(cols = starts_with("X"), values_to = "vertex") %>% 
+  select(-name) -> to
+
+data.frame(vertex = 1:nrow(vertices), x = vertices[,1], y = vertices[,2]) -> vo
+
+to %>% left_join(vo, by = "vertex") %>% 
+  ggplot(aes(x = x, y = y)) + 
+  geom_polygon(aes(fill = tess, group = tess), alpha = .2) + 
+  geom_point()
+```
+
+Okay, now we want to extend this to more complex cases. Here are the vertices for a tie in a four-candidate plurality race: 
+
+```{r vertices}
+facet4_vertices <- rbind(
+  c(1/2, 1/2, 0),
+  c(1/3, 1/3, 1/3),
+  c(1/3, 1/3, 0),
+  c(1/4, 1/4, 1/4)
+)
+```
+
+And here is the tesselation: 
+
+```{r get_tess}
+out <- geometry::delaunayn(facet4_vertices)
+out
+```
+
+Why are we getting a tesselation with no data in it? 
+
+I tried specifying the fourth dimension, but this generates an error: "not enough points to construct initial simplex" (given 4, need 6). 
+
+I suppose it's because these are on a plane, and it's looking to put tetrahedrons into this space. In that case, this should work, and it should return a single row: 
+
+```{r vertices_check}
+geometry::delaunayn(rbind(
+  c(1/2, 1/2, 0),
+  c(1/2, 0, 1/2),
+  c(1/2, 0, 0),
+  c(0, 0, 0)
+))
+```
+
+Indeed.
+
+Also, if I specify the complete win region, it should tesselate it: 
+
+```{r all_vertices_a_wins}
+all_vertices_a_wins <- rbind(
+  c(1,0,0),
+  c(1/2, 1/2, 0),
+  c(1/3, 1/3, 1/3),
+  c(1/3, 1/3, 0),
+  c(1/3, 0, 1/3),
+  c(1/4, 1/4, 1/4),
+  c(1/2, 0, 1/2),
+  c(1/2, 0, 0)
+)
+
+geometry::delaunayn(all_vertices_a_wins)
+```
+
+So that is exactly what I would need if I wanted to compute the probability of $a$ winning given a probability distribution. (And indeed that is worth computing.) It would be even better if I could convert linear inequalities into vertices, but I think that is not a big issue.
+
+The challenge is that I just want the facets of *part* of the convex hull (the part facing a specific other candidate), and then I want to integrate the function on those facets. 
+
+It looks like the underlying QHull command could return flat tetrahedrons, but "no degenerate (zero area) regions are returned with the Qt option since the R function removes them from the triangulation". I could try doctoring the R code to make this possible. 
+
+It looks like the key bits of the standard `geometry::delaunayn()` are: 
+
+```{r doctoring}
+p <- facet4_vertices
+tmp_stdout <- tempfile("Rf")
+tmp_stderr <- tempfile("Rf")
+options <- "Qt Qc Qx"
+out <- .Call("C_delaunayn", p, as.character(options), tmp_stdout, 
+        tmp_stderr, PACKAGE = "geometry")
+out
+```
+
+I note that it's not the `R` code that is ensuring that nothing is returned. Are there options to return the tesselation including those with no area? It doesn't seem like it -- the `Qt` option is supposed to allow this, but it doesn't produce it in this case, and contrary to the `R` docs it's not the `R` code that removes it.  
+
+Another possibly relevant function here is `geometry::convhulln()`. It returns triangulated facets of the convex hull! So I just need to identify the ones I need and then apply `SimplicialCubature` to integrate over them. 
+
+```{r convhull_test}
+# three candidaes 
+a_wins_vertices_3 <- rbind(c(1,0), c(.5, .5), c(1/3, 1/3), c(.5, 0))
+case_3 <- geometry::convhulln(a_wins_vertices_3)
+case_3
+
+# four candidates
+case_4 <- geometry::convhulln(all_vertices_a_wins)
+all_vertices_a_wins
+case_4
+```
+
+I think this gets us very close. In the vertex mat I can identify who is tying at each vertex, and each row of `case_4` that does not have the first vertex (the one where $a$ wins all the votes) has only one pair of candidates tying throughout. 
+
+This is all stuff I have been able to do so far. But the real value is to go beyond four candidates, where I should still be able to get answers.
+
+For now I will stick in the vertices myself. (Ultimately I imagine I might be able to work out how to do that automatically.)
+
+```{r five_candidates}
+vert_5 <- rbind(
+  # a wins all votes 
+  c(1,0,0,0), # a
+  # two cands win all votes
+  c(1/2, 1/2, 0, 0), #ab
+  c(1/2, 0, 1/2, 0), #ac
+  c(1/2, 0, 0, 1/2), #ad
+  c(1/2, 0, 0, 0), # ae
+  # three cands win all votes 
+  c(1/3, 1/3, 1/3, 0), #abc
+  c(1/3, 1/3, 0, 1/3), # abd
+  c(1/3, 1/3, 0, 0), # abe
+  c(1/3, 0, 1/3, 1/3), #acd
+  c(1/3, 0, 1/3, 0), # ace
+  c(1/3, 0, 0, 1/3), # ade
+  # four cands win all votes
+  c(1/4, 1/4, 1/4, 1/4), # abcd
+  c(1/4, 1/4, 1/4, 0), # abce
+  c(1/4, 1/4, 0, 1/4), # abde
+  c(1/4, 0, 1/4, 1/4), # acde
+  # five-way tie
+  c(1/5, 1/5, 1/5, 1/5)
+)
+case_5 <- geometry::convhulln(vert_5)
+case_5
+```
+
+So, to apply this to ordinal methods with three candidates, we need to figure out how to get vertices in 6D (5D) for the extreme situations. How would this look? And note it won't be convex for Kemeny, but I can do it in pieces -- get the pivot probs for the Condorcet part, and then for the Kemeny part. 
+
+There is also the question of whether the computation will be really slow, but what I like about `adaptIntegrateSimplex` is that we could start with a lot of error (high `tol` argument) to get it to run and then move down the `tol` to make it more precise.
+
+Vertices for Condorcet: 
+
+```{r condorcet}
+condo <- rbind(
+  # all ab
+  c(1,0,0,0,0),
+  # all ac
+  c(0,1,0,0,0),
+  # all ab and one other 
+  c(1/2, 0, 1/2, 0, 0),
+  c(1/2, 0, 0, 1/2, 0),
+  c(1/2, 0, 0, 0, 1/2),
+  c(1/2, 0, 0, 0, 0),
+  # all ac and one other
+  c(0, 1/2, 1/2, 0, 0),
+  c(0, 1/2, 0, 1/2, 0),
+  c(0, 1/2, 0, 0, 1/2),
+  c(0, 1/2, 0, 0, 0),
+  # all ab and two others
+  c(1/3, 0, 1/3, 0, 1/3),
+  c(1/3, 0, 1/3, 0, 0),
+  c(1/3, 0, 0, 1/3, 1/3),
+  c(1/3, 0, 0, 1/3, 0),
+  # all ac and two others 
+  c(0, 1/3, 1/3, 0, 1/3),
+  c(0, 1/3, 1/3, 0, 0),
+  c(0, 1/3, 0, 1/3, 1/3),
+  c(0, 1/3, 0, 1/3, 0)
+  # all six even not necessary 
+)
+condo_case <- geometry::convhulln(condo)
+condo_case %>% data.frame() %>% 
+  mutate(simplex = 1:nrow(.)) %>% 
+  pivot_longer(cols = starts_with("X"), values_to = "vertex", names_to = "name") %>% 
+  select(-name)  -> pcc 
+
+pcc %>% group_by(simplex) %>% 
+  filter(! 1 %in% vertex & ! 2 %in% vertex)
+```
+
+Actually I'm not sure these are the correct vertices! 
+
+To help make the correct vertices, let's investigate the half-space representation (H) and the vertex representation (V). John has a `H2Vrep` function, and mentions I could also use `rcdd::scdd` directly. (`H2Vrep` wraps `rcdd::scdd`.) Let's investigate those. 
+
+```{r scdd_try}
+library(rcdd)
+a1 <- rbind(-diag(3), c(-1, 1, 0), c(-1, 0, 1))
+b1 <- rep(0, nrow(a1))
+a2 <- c(1,1,1)
+b2 <- 1
+cand_a_wins <- makeH(a1 = a1, b1 = b1, a2 = a2, b2 = b2)
+# I expect this to return the vertices like c(1,0,0), c(.5, .5,0), c(.5, 0, .5), c(1/3, 1/3, 1/3).
+scdd(cand_a_wins)
+```
+
+Excellent, that worked. Extending that to four candidates: 
+
+```{r scdd_try_4}
+a1 <- rbind(-diag(4), c(-1, 1, 0, 0), c(-1, 0, 1, 0), c(-1, 0, 0, 1))
+b1 <- rep(0, nrow(a1))
+a2 <- c(1,1,1,1)
+b2 <- 1
+cand_a_wins <- makeH(a1 = a1, b1 = b1, a2 = a2, b2 = b2)
+scdd(cand_a_wins)
+```
+
+Excellent. Now how about another voting system? Let's do positional. 
+
+```{r scdd_try_positional}
+s <- 1/2
+a1 <- rbind(-diag(6), 
+            c(s-1, -1, 1-s, 1, -s, s), 
+            c(-1, s-1, -s, s, 1-s, s))
+b1 <- rep(0, nrow(a1))
+a2 <- rep(1, 6)
+b2 <- 1
+cand_a_wins <- makeH(a1 = a1, b1 = b1, a2 = a2, b2 = b2)
+scdd(cand_a_wins)
+```
+
+Very cool. So now I have a workflow: 
+
+1. write down constraints for candidate $a$ winning,
+1. convert constraints into matrix form for `makeH()` function,
+1. use `rcdd::scdd(makeH(...))` to get matrix of vertices,
+1. identify vertices where $a$ is tied with $b$ (easy, subject to floating point crap),
+1. use `geometry::convexhulln()` to triangulate,
+1. extract simplexes that include more than one of the vertices where $a$ is tied with $b$ (is that generally the right condition?),
+1. construct `S` array by combining matrix of vertices and output of previous step,
+1. repeatedly apply `SimplicialCubature::adaptIntegrateSimplices()` to get ties between $a$ and $b$, $a$ and $c$, $b$ and $c$ (etc), assuming the method is neutral wrt candidates. 
+
+Note that to get pivot probabilities for fixed methods I only need to construct the `S` array once and store that, which means the `pivotprobs` package does not need to include `rcdd` and `geometry`. But I could write a function that does all of the above given equalities and inequalities; this would allow users to get pivot probabilities for methods not yet considered. (A complication is methods without convex win regions.) Not a bad idea to start there so that I can take advantage of it.   
+
+Very exciting how extensible this is. Big question is performance relative to direct Monte Carlo.

@@ -44,32 +44,6 @@ plurality_pivot_probs_simulation_based <- function(sims = NULL, alpha = NULL, N 
   out
 }
 
-# this was slow -- no longer needed
-# simulation based
-pivotal.probabilities = function(samp, tol = .01){
-  if(is.null(colnames(samp))){colnames(samp) <- letters[1:ncol(samp)]}
-  rank.mat = t(apply(-samp, 1, rank)) # why is there a transpose?
-  out <- list()
-  for(i in 1:ncol(samp)){
-    for(j in 1:ncol(samp)){
-      if(i >= j){next} # this will be a lot faster.
-      out[[paste0(colnames(samp)[i], colnames(samp)[j])]] = sum((rank.mat[,i] + rank.mat[,j]) == 3 & abs(samp[,i] - samp[,j]) < tol/2)/(tol*nrow(samp))
-    }
-  }
-  out
-}
-
-win.shares = function(samp){
-  max.of.row = apply(samp, 1, max, na.rm = T)
-  out = c()
-  for(j in 1:ncol(samp)){
-    out = c(out, sum(samp[,j] == max.of.row))
-  }
-  names(out) = colnames(samp)
-  out/sum(out)
-}
-
-
 ### new analytical (naive) version
 
 library(gtools)
@@ -127,9 +101,47 @@ pivotal.probabilities.analytical = function(alpha.vec, increments = 50, n = 5000
   out
 }
 
+dirichlet_fn <- function(x, alpha){
+  gtools::ddirichlet(c(as.numeric(x), 1 - sum(x)), alpha)
+}
 
 
-# myatt-fisher approach
+# simplicial cubature approach: up to 4 candidates
+# see Genz and Cools
+plurality_ab_tie_sc_based <- function(alpha, ...){
+  # construct simplices for the facet separating a and b
+  if(length(alpha) == 3){
+    S <- cbind(c(1/2, 1/2), c(1/3, 1/3))
+  }else if(length(alpha) == 4){
+    S <- array(c(cbind(1/2, 1/2, 0), c(1/3, 1/3, 0), c(1/3, 1/3, 1/3), cbind(c(1/3, 1/3, 0), c(1/3, 1/3, 1/3), c(1/4, 1/4, 1/4))), dim = c(3, 3, 2))
+  }else{stop("We can't process higher dimensions yet.")}
+
+  SimplicialCubature::adaptIntegrateSimplex(dirichlet_fn, S, alpha = alpha, ...)
+}
+
+plurality_pivot_probs_sc_based <- function(alpha, sep = "", ...){
+
+  if(is.null(names(alpha))){
+    cand_names <- letters[1:length(alpha)]
+  }else{
+    cand_names <- names(alpha)
+  }
+
+  out <- list()
+  for(i in 1:(length(alpha) - 1)){
+    for(j in (i + 1):length(alpha)){
+      this_alpha <- c(alpha[c(i, j)], alpha[-c(i,j)])
+      this_result <- plurality_ab_tie_sc_based(this_alpha, ...)
+      out[[paste0(cand_names[i], sep, cand_names[j])]] <- this_result$integral
+      if(this_result$returnCode != 0){cat("Error: ", this_result$message, "\n", sep = "")}
+    }
+  }
+
+  out
+
+}
+
+# myatt-fisher approach: three candidates only
 
 incomplete.beta = function(x,a,b){
   pbeta(x,a,b)*beta(a,b)
