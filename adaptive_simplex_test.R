@@ -158,7 +158,9 @@ sc0001 %>% unlist() /  sim_based %>% unlist()
 
 # Let's document the problem and send it to John Nolan?
 
-# Latte Integrale (JDP at UC Davis) seems interesting, and JDL looks like he could be crazy enough to want to be involved.
+# Latte Integrale (JDP at UC Davis) seems interesting, and JDL looks like he could be crazy enough to respond if I asked something.
+
+# So the good thing is that I persisted and figured some stuff out.
 
 
 # and how can we extend this to other methods?
