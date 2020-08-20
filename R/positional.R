@@ -29,9 +29,9 @@ positional_piv_probs_simulation <- function(sims = NULL, alpha_vec = NULL, N = 1
 
   # this is direct Monte Carlo -- nothing fancy
   out <- list(
-    mean(score_a > score_b & score_a - score_b < tol & score_b > score_c)/tol,
-    mean(score_a > score_c & score_a - score_c < tol & score_c > score_b)/tol,
-    mean(score_b > score_c & score_b - score_c < tol & score_c > score_a)/tol
+    mean(score_a > score_b & score_a - score_b < tol & score_b > score_c)/(tol/sqrt(3)),
+    mean(score_a > score_c & score_a - score_c < tol & score_c > score_b)/(tol/sqrt(3)),
+    mean(score_b > score_c & score_b - score_c < tol & score_c > score_a)/(tol/sqrt(3))
   )
 
   names(out) <- c(paste0(cand_names[1], sep, cand_names[2]), paste0(cand_names[1], sep, cand_names[3]), paste0(cand_names[2], sep, cand_names[3]))

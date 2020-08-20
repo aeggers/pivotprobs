@@ -1,0 +1,845 @@
+---
+title: "Comparing integration methods"
+author: "Andy Eggers"
+date: "8/18/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(rgl.useNULL=TRUE)
+library(rgl)
+library(tidyverse)
+# library(dplyr)
+library(knitr)
+library(kableExtra)
+knitr::knit_hooks$set(webgl = hook_webgl)
+
+```
+
+## Objective 
+
+We want to check that we get the same results via Monte Carlo and numerical integration methods for some increasingly complicated problems. 
+
+
+### Problem 1 
+
+We start by computing the probability of a tie for first between two candidates in a three-candidate plurality contest. 
+
+For the integrand function, we assume that results are distributed according to $\text{Dirichlet}(10, 8, 6)$. 
+
+```{r params}
+alpha = c(10, 8, 6)
+```
+
+
+#### Direct Monte Carlo
+
+We draw a large number of simulated elections and see how often the first two candidates nearly tie: 
+
+```{r dmc, cache = T}
+set.seed(12345)
+N <- 1000000
+sims <- gtools::rdirichlet(N, alpha)
+tol <- .01 # window defining a tie
+dmc_result <- mean(sims[,1] > sims[,3] & #1  beats 3
+                     sims[,2] > sims[,3] & # 2 beats 3 
+                     abs(sims[,1] - sims[,2]) < tol/2 # 1 and 2 are within tol
+                   )/(tol/sqrt(2)) # normalize by "channel width" to approximate the integral we want 
+dmc_result 
+```
+
+Note that a "near tie" here means 1 and 2 being within `tol` of each other. We then divide by `tol/sqrt(2)`, which is the width of the channel that is being considered a close election. We divide by this width because we are interested in the density at a single width-0 strip of this channel. The width of the channel is `tol/sqrt(2)` (not `tol`, as I initially thought) because two points on either side of the channel where candidates 1 and 2 get $x$ would be $(x - a/2, x + a/2, 1-2x)$ and $(x + a/2, x - a/2, 1-2x)$, and the distance between those two points is $\sqrt{\frac{a^2}{2}} = \frac{a}{\sqrt{2}}$.   
+
+#### Numerical integration via regular grid 
+
+We integrate the integrand function at grid points along the line between $(1/3, 1/3, 0)$ and $(1/2, 1/2, 0)$:
+
+```{r nivg, cache = T}
+n_midpoints <- 1000
+breakpoints <- seq(from = 1/3, to = 1/2, length = n_midpoints + 1)
+midpoints <- breakpoints[-length(breakpoints)] + (breakpoints[2] - breakpoints[1])/2
+grid <- cbind(midpoints, midpoints, 1 - 2*midpoints)
+segment_length <- sqrt(sum((grid[2,] - grid[1,])^2))
+fn_values <- gtools::ddirichlet(grid, alpha = alpha)/sqrt(3)
+nigv_result <- sum(fn_values)*segment_length
+nigv_result
+```
+
+This agrees with the simulation result. Note the $\sqrt{3}$ correction to the Dirichlet density. This is because the integral over the entire $d$-dimensional simplex is $\sqrt{d}$ (see below) while the proportion of simulation draws on the unit simplex is always 1. 
+It seems to me an error in the definition of the Dirichlet density if, when  integrated over the entire unit simplex, it returns $\sqrt{d}$. So I add that correction. 
+
+
+#### Numerical integration via `SimplicialCubature`  
+
+The function we want to integrate is this: 
+
+```{r dir_fn_with_fix, error = T}
+dir_fn <- function(x, alpha){
+  gtools::ddirichlet(x = as.vector(x), alpha = alpha)/sqrt(length(alpha))
+}
+```
+
+Note the $\sqrt{3}$ correction that I also used for the manual numerical integration above. (See below why I write `as.vector(x)`, which suggests a possible fix for John's code.)
+
+To apply `SimplicialCubature`, we need to define the `S` matrix defining the simplex or simplices over which we will be integrating. The `S` matrix has a column for each simplex vertex. 
+
+First we confirm that we get 1 when we integrate over the whole unit simplex: 
+```{r confirm_1, cache = T} 
+confirm_1 <- SimplicialCubature::adaptIntegrateSimplex(dir_fn, S = diag(3), alpha = alpha)
+confirm_1
+```
+
+Now we seek to compute the probability of a tie between candidates 1 and 2. The `S` matrix in this case has two columns identifying the points on the unit simplex between which we want to integrate: 
+
+```{r define_S} 
+S <- cbind(c(1/2, 1/2, 0), c(1/3, 1/3, 1/3))
+S
+```
+
+The integral is then:
+```{r sc, cache = T, error = T}
+# ch
+sc_result <- SimplicialCubature::adaptIntegrateSimplex(dir_fn, S = S, alpha = alpha)
+sc_result$integral
+```
+
+#### Comparison 
+
+```{r comp_table_1}
+df <- data.frame(`Tie between` = c("ab"), `Monte Carlo` = dmc_result, `Manual integration` = nigv_result, `SimpCub integration` = sc_result$integral)
+kable(df) %>% 
+  kable_styling(full_width = F)
+```
+
+### Problem 2
+
+Get the probability of all three ties for first given the same `alpha` vector. 
+
+#### Direct Monte Carlo
+
+First we define a function: 
+
+```{r three_sims_func}
+ab_tie_for_first_MC <- function(sims, tol = .01){
+  row_max <- apply(sims, 1, max)
+  mean((sims[,1] == row_max | sims[,2] == row_max) & abs(sims[,1] - sims[,2]) < tol/2)/(tol/sqrt(2))  
+}
+```
+
+Then we do the computations: 
+```{r three_sims_cal, cache = T}
+dmc_3 <- c(ab_tie_for_first_MC(sims), ab_tie_for_first_MC(sims[,c(1,3,2)]), ab_tie_for_first_MC(sims[,c(2,3,1)]))
+dmc_3
+```
+
+#### Numerical integration via grid 
+
+First we define a function:
+
+```{r nivg_x, cache = T}
+ab_tie_for_first_nivg3 <- function(alpha, n_midpoints = 1000){
+  breakpoints <- seq(from = 1/3, to = 1/2, length = n_midpoints + 1)
+  midpoints <- breakpoints[-length(breakpoints)] + (breakpoints[2] - breakpoints[1])/2
+  grid <- cbind(midpoints, midpoints, 1 - 2*midpoints)
+  segment_length <- sqrt(sum((grid[2,] - grid[1,])^2))
+  fn_values <- gtools::ddirichlet(grid, alpha = alpha)/sqrt(3)
+  sum(fn_values)*segment_length
+}
+```
+
+Then we do the computations: 
+```{r three_nivg_cal}
+nivg_3 <- c(ab_tie_for_first_nivg3(alpha), ab_tie_for_first_nivg3(alpha[c(1,3,2)]), ab_tie_for_first_nivg3(alpha[c(2,3,1)]))
+nivg_3
+```
+
+#### Numerical integration via `SimplicialCubature`
+
+```{r three_scs_x, cache = T}
+#ch
+sc_result_ab <- SimplicialCubature::adaptIntegrateSimplex(dir_fn, S = cbind(c(.5, .5, 0), c(1/3, 1/3, 1/3)), alpha = alpha)
+sc_result_ac <- SimplicialCubature::adaptIntegrateSimplex(dir_fn, S = cbind(c(.5, 0, .5), c(1/3, 1/3, 1/3)), alpha = alpha)
+sc_result_bc <- SimplicialCubature::adaptIntegrateSimplex(dir_fn, S = cbind(c(.0, .5, .5), c(1/3, 1/3, 1/3)), alpha = alpha)
+
+sc_3 <- c(sc_result_ab$integral, sc_result_ac$integral, sc_result_bc$integral)
+sc_3
+```
+
+#### Comparison 
+
+```{r comp_table_2}
+df <- tibble(`Tie between` = c("ab", "ac", "bc"), `Monte Carlo` = dmc_3, `Manual integration` = nivg_3, `SimpCub integration` = sc_3)
+kable(df) %>% 
+  kable_styling(full_width = F)
+```
+
+
+### Problem 3
+
+What is the probability of each candidate receiving at least 50\% of the vote, given the same `alpha` parameters? 
+
+
+#### Direct Monte Carlo
+
+```{r sims_more_than_50, cache = T}
+a_over_50 <- mean(sims[,1] > .5)
+b_over_50 <- mean(sims[,2] > .5)
+c_over_50 <- mean(sims[,3] > .5)
+```
+
+#### `SimplicialCubature`
+
+```{r sc_50, cache = T, error = T}
+#ch
+S_50 <- cbind(c(.5, .5, 0), c(.5, 0, .5), c(1,0,0))
+a_over_50_sc <- SimplicialCubature::adaptIntegrateSimplex(dir_fn, S = S_50, alpha = alpha)
+b_over_50_sc <- SimplicialCubature::adaptIntegrateSimplex(dir_fn, S = S_50, alpha = alpha[c(2,1,3)])
+c_over_50_sc <- SimplicialCubature::adaptIntegrateSimplex(dir_fn, S = S_50, alpha = alpha[c(3,1,2)])
+```
+
+#### Comparison 
+
+```{r comp_table_3}
+df <- tibble(`Candidate` = c("a", "b", "c"), `Monte Carlo` = c(a_over_50, b_over_50, c_over_50), `SimpCub integration` = c(a_over_50_sc$integral, b_over_50_sc$integral, c_over_50_sc$integral))
+kable(df) %>% 
+  kable_styling(full_width = F)
+```
+
+
+### Problem 4
+
+Compute the probability of each tie for first in a four-candidate plurality race with results distributed according to $\text{Dirichlet}(10, 8, 6, 4)$.
+
+```{r sto_alpha4}
+alpha4 <- c(10, 8, 6, 4)
+```
+
+#### Direct Monte Carlo
+
+First define a function for cycling through cases: 
+
+```{r dmc_func}
+plurality_tie_probs_from_sims <- function(sims, tol = .01, sep = ""){
+
+  out <- list()
+  cand_names <- letters[1:ncol(sims)]
+  for(i in 1:(ncol(sims)-1)){
+    for(j in (i+1):ncol(sims)){
+      out[[paste0(cand_names[i], sep, cand_names[j])]] = ab_tie_for_first_MC(cbind(sims[,c(i,j)], sims[,-c(i,j)])) 
+    }
+  }
+  out
+  
+}
+```
+
+Then generate the simulations and apply the function: 
+
+```{r dmc_4, cache = T}
+N <- 10000000
+sims4 <- gtools::rdirichlet(N, alpha4)
+dmc_4 <- plurality_tie_probs_from_sims(sims4)
+
+```
+
+#### `SimplicialCubature` approach 
+
+To compute the probability of a tie between $a$ and $b$, we need to integrate over a quadrilateral facet with the vertices $(1/2, 1/2, 0, 0)$, $(1/3, 1/3, 1/3, 0)$, $(1/3, 1/3, 0, 1/3)$, $(1/4, 1/4, 1/4, 1/4)$. 
+
+`SimplicialCubature` allows us to specify `S` as an array, with each layer identifying the vertices of one simplex. 
+
+So in this case `S` is: 
+
+```{r S4_plurality}
+v_ab <- c(1/2, 1/2, 0, 0)
+v_abc <- c(1/3, 1/3, 1/3, 0)
+v_abd <- c(1/3, 1/3, 0, 1/3)
+v_abcd <- c(1/4, 1/4, 1/4, 1/4)
+S4 <- array(c(cbind(v_ab, v_abc, v_abd), cbind(v_abc, v_abd, v_abcd)), dim = c(4,3,2))
+
+```
+
+And we can write a function to apply it repeatedly: 
+
+```{r sc_func}
+plurality_tie_probs_from_sc <- function(alpha, S, sep = "", ...){
+
+  out <- list()
+  cand_names <- letters[1:length(alpha)]
+  for(i in 1:(length(cand_names)-1)){
+    for(j in (i+1):length(cand_names)){
+      out[[paste0(cand_names[i], sep, cand_names[j])]] = SimplicialCubature::adaptIntegrateSimplex(dir_fn, S = S, alpha = c(alpha[c(i,j)], alpha[-c(i,j)]), ...)$integral  # throwing out other components for now 
+    }
+  }
+  out  
+  
+}
+```
+
+And apply it: 
+
+```{r sc_4, cache = T, eval = T}
+sc_4 <- plurality_tie_probs_from_sc(alpha4, S = S4)
+```
+
+
+#### Comparison
+
+```{r comp_table_4}
+df <- tibble(`Candidate pair` = names(sc_4), `Monte Carlo` = unlist(dmc_4), `SimpCub integration` = unlist(sc_4), Ratio = unlist(sc_4)/unlist(dmc_4))
+kable(df) %>% 
+  kable_styling(full_width = F)
+```
+
+
+
+<!-- One thing to check: what is the integral over 4 dimensions? Maybe the correction I need to apply depends on the number of dimensions. -->
+
+<!-- ```{r unity_checks, cache = T} -->
+<!-- # the Dirichlet with no correction -->
+<!-- dir_fnx <- function(x, alpha){ -->
+<!--   gtools::ddirichlet(as.vector(x), alpha = alpha) -->
+<!-- }  -->
+<!-- unity_2 <- SimplicialCubature::adaptIntegrateSimplex(dir_fnx, S = diag(2), alpha = c(1,1)) -->
+<!-- unity_3 <- SimplicialCubature::adaptIntegrateSimplex(dir_fnx, S = diag(3), alpha = c(1,1,1)) -->
+<!-- unity_4 <- SimplicialCubature::adaptIntegrateSimplex(dir_fnx, S = diag(4), alpha = c(1,1,1,1)) -->
+<!-- unity_5 <- SimplicialCubature::adaptIntegrateSimplex(dir_fnx, S = diag(5), alpha = c(1,1,1,1,1)) -->
+<!-- unity_6 <- SimplicialCubature::adaptIntegrateSimplex(dir_fnx, S = diag(6), alpha = c(1,1,1,1,1,1)) -->
+<!-- plot(2:6, c(unity_2$integral, unity_3$integral, unity_4$integral, unity_5$integral, unity_6$integral), type = "b", pch = 19, xlab = "Dimensions", ylab = "Integral over entire unit simplex") -->
+
+<!-- ``` -->
+
+<!-- Yes it does. So I need to apply a correction in the function that depends on the dimension of `alpha`.  Get to that next.  -->
+
+
+## Extending `SimplicialCubature`
+
+I have developed some methods for applying `SimplicialCubature` to an arbitrary voting system. The step is to extract the `S` array from a matrix of "winning conditions", expressed as coefficients on inequalities relative ot zero. For example, the conditions for winning in a four-candidate plurality contest could be written 
+
+\begin{array}
+v_1 - v_2 >=& 0 \\
+v_1 -  v_3 >=& 0 \\
+v_1 - v_4 >=& 0. \\
+\end{array}
+
+I represent these as a matrix as follows: 
+
+```{r pwv4}
+plurality_win_conditions_4 <- rbind(c(1,-1,0,0), c(1,0,-1,0), c(1,0,0,-1)) 
+plurality_win_conditions_4
+```
+
+Each row states a condition $\beta$ such that $\mathbf{v}\beta \geq 0$ should hold if candidate 1 is going to win. Then the `cand_a_win_region_vertices_from_win_conditions()` function returns the vertices of candidate 1's "win region" given the matrix of win conditions, and `simplices_to_integrate_from_win_region_vertices()` takes these vertices plus a single win condition that must bind with equality and returns an `S` array representing the simplices on facets of candidate 1's win region where the given condition binds with equality. Putting this all together, 
+`S_array_from_win_conditions()` takes a matrix of win conditions and returns the `S` array that describes the facets where the first list win condition binds with equality. To illustrate with a four-candidate plurality contest:
+
+```{r S_from_wc}
+source("R/general_numerical_methods.R")
+S_4ab <- S_array_from_win_conditions(plurality_win_conditions_4)
+S_4ab
+S_4ac <- S_array_from_win_conditions(plurality_win_conditions_4[c(2,1,3),])
+S_4ac
+```
+
+Here we have Borda count: 
+
+```{r borda_S_from_wc}
+s <- 1/2
+borda_count_win_conditions <- 
+  rbind(c(1-s, 1, s - 1, -1, s, -s),
+        c(1, 1-s, s, -s, s - 1, -1))
+S_bc <- S_array_from_win_conditions(borda_count_win_conditions)
+S_bc
+
+```
+
+Now we can test that we produce the right results when generating the `S` matrix from a matrix of win conditions. This allows us to go into higher-dimensional cases where we might otherwise struggle to generate the `S` array  
+
+### Problem 5
+
+Compute the probability of each tie for first in a five-candidate plurality race with results distributed according to $\text{Dirichlet}(10, 8, 6, 4, 3)$.
+
+#### Direct Monte Carlo
+
+```{r problem_5_sims, cache = T}
+alpha5 <- c(10, 8, 6, 4, 3)
+sims5 <- gtools::rdirichlet(1000000, alpha5)
+system.time(pp_sims_5 <- plurality_tie_probs_from_sims(sims5))
+```
+
+#### `SimplicialCubature` with generated `S` array
+
+```{r problem_5_sc, cache = T}
+wc5 <- cbind(rep(1,4), -diag(4))
+S_5 <- S_array_from_win_conditions(wc5)
+S_5
+system.time(pp_sc_5 <- plurality_tie_probs_from_sc(alpha5, S_5))
+```
+
+#### Comparison 
+
+```{r comparison_5}
+tibble(`Candidate pair` = names(pp_sc_5), `Monte Carlo` = unlist(pp_sims_5), `SimpCub integration` = unlist(pp_sc_5), Ratio = unlist(pp_sc_5)/unlist(pp_sims_5)) %>% 
+  kable() %>% 
+  kable_styling(full_width = F)
+```
+
+So we reproduce the simulation results, but note that integration with the default settings takes a long time. We can speed it up a lot by relaxing the requirements about error. 
+
+```{r problem_5_sc_more_error, cache = T}
+wc5 <- cbind(rep(1,4), -diag(4))
+S_5 <- S_array_from_win_conditions(wc5)
+system.time(pp_sc_5_tol_1 <- plurality_tie_probs_from_sc(alpha5, S_5, tol = .1))
+system.time(pp_sc_5_absError_01 <- plurality_tie_probs_from_sc(alpha5, S_5, absError = .01))
+
+tibble(`Candidate pair` = names(pp_sc_5), `Monte Carlo` = unlist(pp_sims_5), `SimpCub integration` = unlist(pp_sc_5), `SimpCub integration tol .1` = unlist(pp_sc_5_tol_1), `SimpCub integration absError .01` = unlist(pp_sc_5_absError_01)) %>% 
+  kable() %>% 
+  kable_styling(full_width = F)
+```
+
+
+### Problem 6
+
+Compute the probability of each tie for first in a three-candidate Borda count contest with results (described by the proportion of ballots with rank ordering $abc, acb, bac, bca, cab, cba$) distributed according to $\text{Dirichlet}(10, 6, 4, 5, 3, 11)$ .
+
+#### Direct Monte Carlo
+
+In the plurality case, we established that the target area increased by $\sqrt{2}$ for each increase in the width of the window we used to locate ties for first. Some initial testing indicated a similar issue comes up with Borda count when we look for two scores to be tied for first, but that $\sqrt{2}$ is not the correct factor. To find the correct factor without doing any serious geometry, we do the following experiment: for a fixed set of simulations, how much does the probability of two scores being within `tol` increase as we vary `tol`? In the plurality case it should have increased by approximately $\sqrt{2}$. What is it here? 
+
+```{r fix_sims, cache = T}
+# draw simulations 
+bc_alpha <- c(10, 6, 4, 5, 3, 11)
+sims_bc <- gtools::rdirichlet(1000000, alpha = bc_alpha)
+
+score_mat <- cbind(sims_bc[,1] + sims_bc[,2] + s*(sims_bc[,3] + sims_bc[,5]), 
+                   sims_bc[,3] + sims_bc[,4] + s*(sims_bc[,1] + sims_bc[,6]),
+                   sims_bc[,5] + sims_bc[,6] + s*(sims_bc[,2] + sims_bc[,4]))
+
+# function for getting the probability of being within a window defined by tol
+pr_in_window <- function(tol, sims){
+  mean(sims[,1] > sims[,3] & sims[,2] > sims[,3] & abs(sims[,1] - sims[,2]) < tol/2)
+}
+
+# apply that function across several values of tol
+data.frame(tol = seq(.005, .03, by = .005)) %>% 
+  mutate(piw = as.numeric(pmap(., pr_in_window, sims = score_mat))) -> df 
+
+# plot the result along with a line of slope 1 and a line of slope sqrt(3)
+df %>% ggplot(aes(x = tol, y = piw)) + geom_point() + geom_abline(slope = 1, intercept = 0, linetype = 2) + geom_abline(slope = sqrt(3), intercept = 0, linetype = 2, col = "orange")
+
+```
+
+So the correction factor is $\sqrt{3}$. We apply that in the function `positional_piv_probs_simulation()`, which takes a set of simulations (6 ballot shares) and a value of `s` (Borda has `s = .5`) and returns the three pivot probabilities. (I draw a new sample so that the time comparison is more appropriate.)
+
+```{r bc_sims, cache = T}
+source("R/positional.R")
+system.time(pp_bc <- positional_piv_probs_simulation(
+  gtools::rdirichlet(1000000, alpha = bc_alpha))
+)
+```
+
+#### `SimplicialCubature` with generated `S` array
+
+`ordinal_shuffle_dirichlet_pivot_probs()` takes an `alpha` vector and an `S` array and integrates the Dirichlet distribution with parameter vector `alpha` over `S` for each pair of candidates. `S` corresponds to the tie between candidates 1 and 2. To get the tie between 1 and 3, it shuffles the `alpha` vector so that 3 and 2 switch places, i.e. `alpha` is replaced by `alpha[c(2,1,5,6,3,4)]`.  
+
+```{r sc_borda, cache = T}
+system.time(pp_sc_bc <- ordinal_shuffle_dirichlet_pivot_probs(bc_alpha, S_bc))
+system.time(pp_sc_bc_tol_1 <- ordinal_shuffle_dirichlet_pivot_probs(bc_alpha, S_bc, tol = .1))
+system.time(pp_sc_bc_absError_01 <- ordinal_shuffle_dirichlet_pivot_probs(bc_alpha, S_bc, absError = .01))
+```
+
+The `tol` and `absError` arguments don't seem to have any effect on speed here, nor do they affect the results. Is it because they didn't complete the computations? Yes.
+
+```{r report_bc_sc}
+pp_sc_bc$ab$message
+pp_sc_bc$ab$functionEvaluations
+pp_sc_bc_tol_1$ab$message
+pp_sc_bc_tol_1$ab$functionEvaluations
+pp_sc_bc_absError_01$ab$message
+pp_sc_bc_absError_01$ab$functionEvaluations
+```
+
+So now I increase the maximum number of function evaluations: 
+
+```{r sc_borda_2, cache = T}
+maxEvals <- 100000
+system.time(pp_sc_bc <- ordinal_shuffle_dirichlet_pivot_probs(bc_alpha, S_bc, maxEvals = maxEvals))
+system.time(pp_sc_bc_tol_1 <- ordinal_shuffle_dirichlet_pivot_probs(bc_alpha, S_bc, tol = .1, maxEvals = maxEvals))
+system.time(pp_sc_bc_absError_01 <- ordinal_shuffle_dirichlet_pivot_probs(bc_alpha, S_bc, absError = .01, maxEvals = maxEvals))
+```
+
+And see the report: 
+```{r report_bc_sc_2}
+tibble(`Candidate pair` = c("ab", "ac", "bc"), 
+       `Default` = c(pp_sc_bc$ab$functionEvaluations, pp_sc_bc$ac$functionEvaluations, pp_sc_bc$bc$functionEvaluations),
+       `tol = .01` = c(pp_sc_bc_tol_1$ab$functionEvaluations, pp_sc_bc_tol_1$ac$functionEvaluations, pp_sc_bc_tol_1$bc$functionEvaluations),
+       `absError = .01` = c(pp_sc_bc_absError_01$ab$functionEvaluations, pp_sc_bc_absError_01$ac$functionEvaluations, pp_sc_bc_absError_01$bc$functionEvaluations)) %>% 
+  kable() %>% 
+  kable_styling(full_width = F)
+```
+
+
+#### Comparison 
+
+```{r bc_comparison}
+
+tibble(`Candidate pair` = names(pp_sc_bc), `Monte Carlo` = unlist(pp_bc), `SimpCub integration` = c(pp_sc_bc$ab$integral, pp_sc_bc$ac$integral, pp_sc_bc$bc$integral), `SimpCub integration tol .1` = c(pp_sc_bc_tol_1$ab$integral, pp_sc_bc_tol_1$ac$integral, pp_sc_bc_tol_1$bc$integral), `SimpCub integration absError .01` = c(pp_sc_bc_absError_01$ab$integral, pp_sc_bc_absError_01$ac$integral, pp_sc_bc_absError_01$bc$integral)) %>% 
+  kable() %>% 
+  kable_styling(full_width = F)
+```
+
+Conclusion: the method matches the simulation results, but it takes a large number of function evaluations so it is slow. It can be sped up by specifying `tol = .1`. In this case one would probably prefer the simulation approach because it's faster. But can we think of cases where we need some precision on a very low probability event to get the polling algorithm to work correctly? Suppose candidate $a$ is way ahead of the other two, so that all of the pivot probabilities are really low, and consider a voter who strongly prefers $a$ to $b$ and $c$. The strategic move is to rank the likely second-place candidate last, and this could depend on random variation in the simulations. You could argue that we don't really care what happens in that case, but it's good to have a more complete solution. 
+
+I wonder how the numerical result varies with `tol`. 
+
+```{r tol_test, cache = T}
+bc_alpha_2 <- c(10, 8, 1.5,3, 2,3)
+maxEvals <- 200000 # set this high so it doesn't bind
+
+data.frame(tol = c(.0001, .001, .01, .1, .2, .3)) %>% 
+  mutate(sc_result = pmap(., ordinal_shuffle_dirichlet_pivot_probs, alpha = bc_alpha_2, S = S_bc, maxEvals = maxEvals)) %>% 
+  unnest_longer(sc_result) %>% 
+  rename(pp = sc_result_id) %>% 
+  unnest_longer(sc_result) %>% 
+  filter(sc_result_id %in% c("integral", "functionEvaluations")) %>% 
+  unnest(sc_result) -> df2
+```
+
+```{r tol_plot}
+df2 %>% filter(sc_result_id == "integral") %>% 
+  mutate(tolf = factor(tol)) %>% 
+  ggplot(aes(x = tolf, y = sc_result, col = pp, group = pp)) + 
+  scale_y_log10() + 
+  geom_line() + 
+  geom_point() + 
+  labs(x = "tol argument to SC", y = "Pivot probability")
+  
+
+df2 %>% filter(sc_result_id == "functionEvaluations") %>% 
+  mutate(tolf = factor(tol)) %>% 
+  ggplot(aes(x = tolf, y = sc_result, col = pp, group = pp)) + 
+  geom_line() + 
+  geom_point() + 
+  labs(x = "tol argument to SC", y = "Number of function evaluations")
+
+```
+
+This suggests that with pretty high `tol` we could do fine. It's tricky to figure out which is actually better as we don't know the circumstances we will be in.  
+
+
+### A Condorcet problem 
+
+Now we seek to compute pivot probabilities for Condorcet methods. First, compute the probability of a decisive tie (i.e. one that does not result in a cycle) between each pair of candidates given `alpha` vector of `c(10, 5, 6,7, 3,9)`.
+
+#### Direct Monte Carlo 
+
+I wrote a function for computing Condorcet pivot probabilities from a set of simulations:
+
+```{r dmc_condorcet, cache = T}
+source("R/condorcet.R")
+
+alpha_condorcet <- c(10, 5, 6,7, 3,9)
+condorcet_sims <- gtools::rdirichlet(10000000, alpha_condorcet)
+condorcet_dmc <- condorcet_pivot_probs_from_sims(condorcet_sims)
+condorcet_dmc 
+```
+
+The function also computes Kemeny pivot probabil
+
+#### `SimplicialCubature` with generated `S` array 
+
+We start by generating the `S` array for decisive Condorcet ties, i.e. those not resulting in a cycle: 
+
+```{r decisive_condorcet_S, cache = T}
+maxEvals <- 100000
+condorcet_win_conditions <- rbind(
+  c(1,1,-1,-1,1,-1),  # a beats b
+  c(1,1,1,-1,-1,-1), # a beats c 
+  c(1,-1,1,1,-1,-1)  # b beats c -- not actually a requirement for a to win, but this is a requirement for the a-b contest to be decisive
+)
+condorcet_S <- S_array_from_win_conditions(condorcet_win_conditions)
+condorcet_out <- ordinal_shuffle_dirichlet_pivot_probs(alpha_condorcet, condorcet_S, tol = .1, maxEvals = maxEvals)
+```
+
+Did we hit the `maxEvals` ceiling? No:
+
+```{r check_maxevals}
+condorcet_out$ab$message
+condorcet_out$ac$message
+condorcet_out$bc$message
+```
+
+#### Comparison
+
+Now we compare the two approaches: 
+
+```{r condorcet_comparison}
+tibble(`Candidate pair` = names(condorcet_out), 
+       `Monte Carlo` = c(condorcet_dmc$ab, condorcet_dmc$ac, condorcet_dmc$bc),
+       `SimpCub integration` = c(condorcet_out$ab$integral,
+                                 condorcet_out$ac$integral,
+                                 condorcet_out$bc$integral)) %>% 
+  kable() %>% 
+  kable_styling(full_width = F)
+```
+
+The initial results with 1M simulations had the right order and similar magnitudes but substantial discrepancies. Expanding it to 10M made no difference, so we seem to have a genuine discrepancy. 
+
+
+
+<!-- ```{r kemeny_condorcet_S, cache = T} -->
+<!-- maxEvals <- 100000 -->
+<!-- condorcet_win_conditions_kemeny <- rbind( -->
+<!--   c(1,1,-1,-1,1,-1),  # a beats b -->
+<!--   c(1,1,1,-1,-1,-1) # a beats c  -->
+<!-- ) -->
+<!-- condorcet_S <- S_array_from_win_conditions(condorcet_win_conditions) -->
+<!-- condorcet_out <- ordinal_shuffle_dirichlet_pivot_probs(alpha_condorcet, condorcet_S, tol = .1, maxEvals = maxEvals) -->
+<!-- ``` -->
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Next steps 
+
+Now that I have things agreeing, I want to go back to my `general_numerical_methods.R` methods applying what I have learned here. Start by doing plurality with 5 or 6 candidates, then Borda count and Condorcet. I believe I have a nice general powerful method that is unfortunately very slow for interesting problems. But I need to check that it works (now that I've fixed a few things), compare performance to simulation, and see if I can speed it up a little. That will be fun and absorbing. 
+
+
+## Scrap below this 
+
+
+As is the ratio for the same quantity for each of the other candidates:
+
+```{r ratio_check_2, cache = T}
+b_50 <- SimplicialCubature::adaptIntegrateSimplex(dir_fn, S = cbind(c(.5, .5, 0), c(0, .5, .5), c(0,1,0)), alpha = alpha)
+c_50 <- SimplicialCubature::adaptIntegrateSimplex(dir_fn, S = cbind(c(0, .5, .5), c(.5, 0, .5), c(0,0,1)), alpha = alpha)
+
+sc_50s <- c(sc_50$integral, b_50$integral, c_50$integral)
+dmc_50s <- c(mean(sims[,1] > .5), mean(sims[,2] > .5), mean(sims[,3] > .5))
+
+sc_50s/dmc_50s
+
+```
+
+We can actually match the simulation-based result with `SimplicialCubature` if we drop a dimension:
+```{r sc_50_2, cache = T, error = T}
+S_50_2 <- cbind(c(.5, .5), c(.5, 0), c(1,0))
+dir_fn2 <- function(x, alpha){gtools::ddirichlet(c(x, 1 - sum(x)), alpha = alpha)}
+sc_50_2 <- SimplicialCubature::adaptIntegrateSimplex(dir_fn2, S = S_50_2, alpha = alpha)
+sc_50_2$integral
+```
+
+
+### Diagnosis 
+
+What explains the different results? Let's see how the differences vary across the three possible ties we could have in the same election. 
+
+Here is the probability of each tie according to direct Monte Carlo: 
+
+```{r three_sims, cache = T}
+ab_tie_for_first <- function(sims, tol = .01){
+  row_max <- apply(sims, 1, max)
+  mean((sims[,1] == row_max | sims[,2] == row_max) & abs(sims[,1] - sims[,2]) < tol/2)/(tol/sqrt(2))  
+}
+
+dmc_3 <- c(ab_tie_for_first(sims), ab_tie_for_first(sims[,c(1,3,2)]), ab_tie_for_first(sims[,c(2,3,1)]))
+dmc_3
+```
+
+And here are the three `SimplicialCubature`-based results: 
+
+```{r three_scs, cache = T}
+sc_result_ac <- SimplicialCubature::adaptIntegrateSimplex(dir_fn, S = cbind(c(.5, 0, .5), c(1/3, 1/3, 1/3)), alpha = alpha)
+sc_result_bc <- SimplicialCubature::adaptIntegrateSimplex(dir_fn, S = cbind(c(.0, .5, .5), c(1/3, 1/3, 1/3)), alpha = alpha)
+
+sc_3 <- c(sc_result$integral, sc_result_ac$integral, sc_result_bc$integral)
+sc_3
+
+sc_3/dmc_3
+```
+
+Same comparison but for different parameters on the integrand function: 
+
+```{r diff_alpha, cache = T}
+# ch 
+alpha2 <- c(18, 15, 8)
+sc_result_ab <- SimplicialCubature::adaptIntegrateSimplex(dir_fn, S = cbind(c(.5, .5, 0), c(1/3, 1/3, 1/3)), alpha = alpha2)
+sc_result_ac <- SimplicialCubature::adaptIntegrateSimplex(dir_fn, S = cbind(c(.5, 0, .5), c(1/3, 1/3, 1/3)), alpha = alpha2)
+sc_result_bc <- SimplicialCubature::adaptIntegrateSimplex(dir_fn, S = cbind(c(.0, .5, .5), c(1/3, 1/3, 1/3)), alpha = alpha2)
+
+sc_3a <- c(sc_result_ab$integral, sc_result_ac$integral, sc_result_bc$integral)
+sc_3a
+
+sims2 <- gtools::rdirichlet(N, alpha2)
+dmc_3a <- c(ab_tie_for_first(sims2), ab_tie_for_first(sims2[,c(1,3,2)]), ab_tie_for_first(sims2[,c(2,3,1)]))
+
+dmc_3a 
+
+sc_3a/dmc_3a
+```
+
+So the `SimplicialCubature` results are consistently around $\sqrt{3}$ times bigger than the simulation-based results. What explains this?
+
+I think the confusion arises because distances are spread out on the unit simplex compared to its projection onto $\mathbb{R}^{k-1}$. We can see this in the numerical integration approach, where we are integrating along a line on the unit simplex.  Let one point along the line be $(x,y,z)$ and let the next point be $(x + a, y + a, z - 2a)$. Then the distance between these points is $\sqrt{(a^2 + a^2 + 4a^2)} = \sqrt{6a^2} \approx 2.45a$. Initially I did not see this and treated my step size as $a$. My simulation answer and grid-based numerical integration answer agreed, but they differed from the `SimplicialCubature` answer by that amount. Then I corrected the step size for the numerical integration and that agreed with `SimplicialCubature`. Next I noticed that the width of the target area in the Monte Carlo was not `tol` but `tol/sqrt(2)` But I don't yet see how I get the remaining $\sqrt{3}$ in the simulation approach: if the Dirichlet draws are being done correctly, then I think I should get the correct answer by checking how often the result is close to the pivot event, as long as I am correct about what "close" means.        
+
+Here is a slightly different function for the direct Monte Carlo: 
+
+```{r three_sims_2, cache = T}
+# ch
+ab_tie_for_first_v2 <- function(sims, tol = .01){
+  mean(sims[,1] == apply(sims, 1, max) & sims[,1] - sims[,2] < tol)/(tol/sqrt(2))  
+}
+
+dmc_4 <- c(ab_tie_for_first_v2(sims), ab_tie_for_first_v2(sims[,c(1,3,2)]), ab_tie_for_first_v2(sims[,c(2,3,1)]))
+dmc_4
+```
+
+But it produces the same results, right? 
+
+```{r identity_check}
+dmc_3/dmc_4
+```
+
+Are the results that I identify in the direct Monte Carlo within a band of width `tol` along the tie line?
+
+Maybe make a plot? 
+
+```{r plot_mc_region, webgl=T}
+open3d()
+points3d(x = c(1,0,0), y = c(0,1,0), z = c(0,0,1), pch = 19)
+lines3d(x = c(1,0,0, 1), y = c(0,1,0,0), z = c(0, 0,1,0), col = "black")
+ax_val <- 1.25
+ax_col <- rgb(.1, .1, .1, alpha = .5)
+lines3d(x = c(0,ax_val), y = c(0,0), z = c(0,0), col = ax_col)
+lines3d(x = c(0,0), y = c(0,ax_val), z = c(0,0), col = ax_col)
+lines3d(x = c(0,0), y = c(0,0), z = c(0,ax_val), col = ax_col)
+
+# plot some points on the simplex, coloring them according to whether they would be considered a tie or not
+sims <- gtools::rdirichlet(1000, alpha = c(10, 10, 3))
+a <- .025
+in_region <- sims[,1] > sims[,2] & sims[,1] > sims[,3] & sims[,1] - sims[,2] < a
+cols <- c(rgb(.2, .2, .2, alpha = .5), rgb(.8, .2, .2, alpha = .5))
+points3d(sims, pch = 19, cex = .5, col = cols[1 + as.integer(in_region)])
+
+# try to bound that area in box 
+planes3d(a = 1, col = rgb(.5, .5, .5, alpha = .5))
+lines3d(x = c(1/2, 1/3), y = c(1/2, 1/3), z = c(0, 1/3), col = "blue", lty = 2)
+lines3d(x = c(1/2 + a/2, 1/3 + a/2), y = c(1/2-a/2, 1/3-a/2), z = c(0, 1/3), col = "red", lty = 2)
+
+# two points on the edges 
+z <- .1
+points3d(x = (1 - z)/2, y = (1 - z)/2, z = z, pch = 19, size = 5, col = "green")
+points3d(x = (1 - z)/2 + a/2, y = (1 - z)/2 - a/2, z = z, pch = 19, size = 5, col = "green")
+# those points are on the edges of the region. 
+# key point: the distance between those points is not a, as it may first appear! 
+# it is a/sqrt(2).
+
+```
+
+
+### A different problem 
+
+Here is a different problem that involves integrating an area rather than integrating along a line: what is the probability that candidate 1 wins more than 50\% of the vote? 
+
+But we can't match the tie probabilities this way: 
+```{r ab_tie_2, cache = T, error = T}
+sc_ab <- SimplicialCubature::adaptIntegrateSimplex(dir_fn2, S = cbind(c(.5, .5), c(1/3, 1/3)), alpha = alpha)
+sc_ac <- SimplicialCubature::adaptIntegrateSimplex(dir_fn2, S = cbind(c(.5, 0), c(1/3, 1/3)), alpha = alpha)
+sc_bc <- SimplicialCubature::adaptIntegrateSimplex(dir_fn2, S = cbind(c(.0, .5), c(1/3, 1/3)), alpha = alpha)
+
+sc_2d <- c(sc_ab$integral, sc_ac$integral, sc_bc$integral)
+sc_2d
+```
+
+The relationship between these tie probabilities and the simulation-based probabilities is not linear: 
+
+```{r compare_sc_2d_and_sim}
+sc_2d/dmc_3
+```
+
+But now note that the integration over the unit simplex yields a result of $\sqrt{3}$: 
+
+```{r total_integral, cache = T}
+totes <- SimplicialCubature::adaptIntegrateSimplex(dir_fn, S = cbind(c(1, 0, 0), c(0, 1, 0), c(0,0,1)), alpha = alpha)
+totes$integral
+```
+
+Hmm, in that case is the integral on the unit simplex really correct? It seems to me that I have learned that I was not doing the Monte Carlo correctly (missing the $\sqrt{2}$) but the $\sqrt{3}$ difference is not appropriate. 
+
+
+I have assumed that the simulation-based results are the target, so it seems like my use of `SimplicialCubature` must be incorrect.  
+
+
+
+### Suggestion for `SimplicialCubature`
+
+I encountered an issue trying to use `gtools::ddirichlet` as my integrand function, and I wondered if John might want to fix something in the `SimplicialCubature` code to address it. 
+
+To highlight the issue, let's integrate a function on the unit simplex. This works fine:
+
+```{r examp_sum, error = T}
+S <- cbind(c(1,0,0), c(0,1,0), c(0,0,1)) # same as UnitSimplexV(3)
+sum_fn <- function(x){sum(x)}
+SimplicialCubature::adaptIntegrateSimplex(sum_fn, S)
+```
+
+But we encounter an error when we replace the integrand function with a Dirichlet density: 
+
+```{r examp_dir, error = T}
+dir_fn_naive <- function(x, alpha){
+  gtools::ddirichlet(x = x, alpha = alpha)
+}
+SimplicialCubature::adaptIntegrateSimplex(dir_fn_naive, S, alpha = c(1,1,1))
+```
+
+`gtools::ddirichlet()` seems to think it's being given an `x` argument that is not of the same length as `alpha` (3). 
+
+The problem seems to be that `x` is a matrix, and `gtools::ddirichlet()` is expecting a vector. If we change the format explicitly, no error: 
+<!-- I can fix the problem if I put the elements of `x` together explicitly:  -->
+
+```{r examp_dir_fix, error = T}
+dir_fn_fixed <- function(x, alpha){
+  gtools::ddirichlet(x = as.vector(x), alpha = alpha)
+}
+SimplicialCubature::adaptIntegrateSimplex(dir_fn_fixed, S, alpha = c(1,1,1))
+```
+
+We could consider altering  John alter the code (presumably `adsimp()` and `integrate.vector.fn()`) to work with integrand functions that expect `x` to be a vector? 
+
+
+
+
+## Generating the `S` matrix: John's code and my code (my notes, really)
+
+John kindly sent me some code for generating the `S` matrix given some vertices. Here I load his code and run an example he sent along:  
+
+```{r load_code, webgl=T}
+source('R/TesselationsOfPointCloud.R')
+library(mvmesh)
+V <- cbind( c(1,0,1e-20), c(0,1,0), c(0,0,1), c(.25,.5,.25), c(.1,.4,.5) )
+V
+S <- simplicesFromVertices( V )
+S
+
+open3d()
+  points3d( t(V), size=10,col="red" )
+  for (i in 1:dim(S)[3]) {
+    wrap <- cbind( S[,,i], S[,1,i] )
+    lines3d(t(wrap), width=3, col='blue')
+  }
+```
+
+This code is useful for taking a set of vertices and tesselating it, i.e. rendering a bunch of simplices in the form of an `S` matrix that we can then pass to the `adaptIntegrateSimplex` function. 
+
+The approach I wrote up is based on determining the convex hull of a set of vertices and then extracting the facets relevant to my problem. The `geometry::convhulln()` function represents the convex hull as triangulated/tesselated combinations of vertices, so my function takes the whole set of vertices for a candidate's "win region", get the triangulated/tesselated convex hull, and identifies those facets where a certain condition binds (e.g. $a$ tying $b$ in a particular way) at all vertices; these are the facets where I need to integrate my function. 
+
+In short, my code is more specific to my problem, but like John's code it involves dropping a dimension (projecting down to $\mathbb{R}^{k-1}$) and tesselating.     
