@@ -533,18 +533,53 @@ Now we seek to compute pivot probabilities for Condorcet methods. First, compute
 
 #### Direct Monte Carlo 
 
-I wrote a function for computing Condorcet pivot probabilities from a set of simulations:
+I wrote a function for computing Condorcet pivot probabilities from a set of simulations. 
+
+To set the normalizing factor, we again check to see how the probability of being in the crucial area depends on the parameter `tol`.  
+
+```{r fix_sims_condorcet, cache = T}
+# draw simulations 
+alpha_condorcet <- c(10, 5, 6,7, 3,9)
+sims <- gtools::rdirichlet(1000000, alpha = alpha_condorcet)
+
+pairwise_mat <- cbind(apply(sims[,c(1,2,5)], 1, sum),
+                      apply(sims[,c(1,2,3)], 1, sum),
+                      apply(sims[,c(1,3,4)], 1, sum))
+
+# function for a decisive tie within a window defined by tol
+pr_in_window_condorcet <- function(tol, sims){
+  mean(sims[,2] > 1/2 & # a beats c
+         sims[,3] > 1/2 & # b beats c   
+         abs(sims[,1] - 1/2) < tol/2) # a and b close 
+}
+
+# apply that function across several values of tol
+data.frame(tol = seq(.005, .03, by = .005)) %>% 
+  mutate(piw = as.numeric(pmap(., pr_in_window_condorcet, sims = pairwise_mat))) -> df 
+```
+
+```{r plot_condorcet_fix}
+# plot the result along with a line of slope 1 and a line of slope sqrt(3)
+df %>% ggplot(aes(x = tol, y = piw)) + 
+  geom_point() + 
+  geom_abline(slope = 1, intercept = 0, linetype = 2) + 
+  geom_abline(slope = sqrt(2), intercept = 0, linetype = 2, col = "yellow") +   geom_abline(slope = sqrt(3), intercept = 0, linetype = 2, col = "orange") +
+  geom_abline(slope = sqrt(6)/2, intercept = 0, linetype = 2, col = "red")
+  
+```
+
+
+It seems to be $\sqrt{8}$ i.e. $2\sqrt{2}$. But the normalizer that makes the simulations and numerical results agree is $\frac{\sqrt{6}}{2}$. I need to clarify this. 
+
+The function (using that normalizing factor) also computes Kemeny pivot probabilities, and we will use those below. 
+
 
 ```{r dmc_condorcet, cache = T}
 source("R/condorcet.R")
-
-alpha_condorcet <- c(10, 5, 6,7, 3,9)
-condorcet_sims <- gtools::rdirichlet(10000000, alpha_condorcet)
+condorcet_sims <- gtools::rdirichlet(1000000, alpha_condorcet)
 condorcet_dmc <- condorcet_pivot_probs_from_sims(condorcet_sims)
-condorcet_dmc 
 ```
 
-The function also computes Kemeny pivot probabil
 
 #### `SimplicialCubature` with generated `S` array 
 
@@ -555,7 +590,7 @@ maxEvals <- 100000
 condorcet_win_conditions <- rbind(
   c(1,1,-1,-1,1,-1),  # a beats b
   c(1,1,1,-1,-1,-1), # a beats c 
-  c(1,-1,1,1,-1,-1)  # b beats c -- not actually a requirement for a to win, but this is a requirement for the a-b contest to be decisive
+  c(1,-1,1,1,-1,-1)  # b beats c -- not a requirement for a to win, but this is a requirement for the a-b contest to be decisive
 )
 condorcet_S <- S_array_from_win_conditions(condorcet_win_conditions)
 condorcet_out <- ordinal_shuffle_dirichlet_pivot_probs(alpha_condorcet, condorcet_S, tol = .1, maxEvals = maxEvals)
@@ -583,7 +618,166 @@ tibble(`Candidate pair` = names(condorcet_out),
   kable_styling(full_width = F)
 ```
 
-The initial results with 1M simulations had the right order and similar magnitudes but substantial discrepancies. Expanding it to 10M made no difference, so we seem to have a genuine discrepancy. 
+### Cyclical tie-breaking events: Kemeny with flat distribution 
+
+Now we seek to compute pivot probabilities for a cycle-breaking procedure in which the winner is the one who loses by the least. For initial checking we'll set the  `alpha` parameter to `c(1, 1, 1, 1, 1, 1)`.
+
+#### Direct Monte Carlo 
+
+Same procedure as above: 
+
+```{r dmc_condorcet_1s, cache = T}
+alpha_condorcet <- rep(1, 6)
+condorcet_sims <- gtools::rdirichlet(1000000, alpha_condorcet)
+condorcet_dmc <- condorcet_pivot_probs_from_sims(condorcet_sims)
+```
+
+
+#### `SimplicialCubature` with generated `S` array 
+
+We start by generating the `S` array for the forward cycle Kemeny case: 
+
+```{r kemeny_condorcet_S, cache = F}
+forward_cycle_conditions <- rbind(
+  c(1,1,-1,-1,1,-1), # a beats b
+  c(1,-1,1,1,-1,-1), # b beats c
+  c(-1,-1,-1,1,1,1) # c beats a
+  )
+kemeny_ab_win_conditions_forward <- rbind(
+  c(1,1,0,-1,0,-1),  # a's loss to c better than (equal to) b's loss to a
+  c(1,0,1,0,-1,-1), # a's loss to c better than c's loss to b
+  c(0,-1,1,1,-1,0),  # b's loss to a better than c's loss to b
+  forward_cycle_conditions
+)
+kemeny_forward_S <- S_array_from_win_conditions(kemeny_ab_win_conditions_forward)
+```
+
+And the reverse one: 
+
+```{r kemeny_condorcet_S_reverse, cache = F}
+reverse_cycle_conditions <- -forward_cycle_conditions
+kemeny_ab_win_conditions_reverse <- rbind(
+  c(0,1,-1,-1,1,0),  # a's loss to b better than (equal to) b's loss to c
+  c(1,1,0,-1,0,-1), # a's loss to b better than c's loss to a
+  c(1,0,1,0,-1,-1),  # b's loss to c better than c's loss to a
+  reverse_cycle_conditions
+)
+kemeny_reverse_S <- S_array_from_win_conditions(kemeny_ab_win_conditions_reverse)
+```
+
+Now we compute both:
+
+```{r kemeny_compute, cache = T}
+# ch
+kemeny_forward_out <- ordinal_shuffle_dirichlet_pivot_probs(alpha_condorcet, kemeny_forward_S, tol = .1, maxEvals = maxEvals)
+kemeny_reverse_out <- ordinal_shuffle_dirichlet_pivot_probs(alpha_condorcet, kemeny_reverse_S, tol = .1, maxEvals = maxEvals)
+```
+
+Did we hit the `maxEvals` ceiling? No:
+
+```{r check_maxevals_kem}
+kemeny_forward_out$ab$message
+kemeny_forward_out$ac$message
+kemeny_forward_out$bc$message
+kemeny_reverse_out$ab$message
+kemeny_reverse_out$ac$message
+kemeny_reverse_out$bc$message
+```
+
+#### Comparison 
+
+
+```{r kemeny_comparison_x}
+tibble(`Candidate pair` = c("ab_forward", "ab_reverse", "ac_forward", "ac_reverse", "bc_forward", "bc_reverse"), 
+       `Monte Carlo` = c(condorcet_dmc$ab_forward, condorcet_dmc$ab_reverse, condorcet_dmc$ac_forward, condorcet_dmc$ac_reverse, condorcet_dmc$bc_forward, condorcet_dmc$bc_reverse),
+       `SimpCub integration` = c(kemeny_forward_out$ab$integral,
+                                 kemeny_reverse_out$ab$integral,
+                                 kemeny_forward_out$ac$integral,
+                                 kemeny_reverse_out$ac$integral,
+                                 kemeny_forward_out$bc$integral,
+                                 kemeny_reverse_out$bc$integral)) %>% 
+  mutate(`Ratio` = `SimpCub integration`/`Monte Carlo`) %>% 
+  kable() %>% 
+  kable_styling(full_width = F)
+```
+
+
+### Cyclical tie-breaking events: Kemeny with another distribution 
+
+Now we seek to compute pivot probabilities for a cycle-breaking procedure in which the winner is the one who loses by the least. For initial checking we'll set the  `alpha` parameter to `c(10, 4, 6, 7, 3, 12)`.
+
+#### Direct Monte Carlo 
+
+Same procedure as above: 
+
+```{r dmc_condorcet_1s_x, cache = T}
+alpha_condorcet <- c(10, 4, 6, 7, 3, 12)
+condorcet_sims <- gtools::rdirichlet(1000000, alpha_condorcet)
+condorcet_dmc <- condorcet_pivot_probs_from_sims(condorcet_sims)
+```
+
+
+#### `SimplicialCubature` with generated `S` array 
+
+We do the computations using the `S` array generated above:
+
+```{r kemeny_compute_x, cache = T}
+kemeny_forward_out <- ordinal_shuffle_dirichlet_pivot_probs(alpha_condorcet, kemeny_forward_S, tol = .1, maxEvals = maxEvals)
+kemeny_reverse_out <- ordinal_shuffle_dirichlet_pivot_probs(alpha_condorcet, kemeny_reverse_S, tol = .1, maxEvals = maxEvals)
+```
+
+Did we hit the `maxEvals` ceiling? No:
+
+```{r check_maxevals_kem_x}
+c(kemeny_forward_out$ab$message, kemeny_forward_out$ac$message, kemeny_forward_out$bc$message, kemeny_reverse_out$ab$message, kemeny_reverse_out$ac$message, kemeny_reverse_out$bc$message)
+```
+
+#### Comparison 
+
+
+```{r kemeny_comparison_xx}
+tibble(`Candidate pair` = c("ab_forward", "ab_reverse", "ac_forward", "ac_reverse", "bc_forward", "bc_reverse"), 
+       `Monte Carlo` = c(condorcet_dmc$ab_forward, condorcet_dmc$ab_reverse, condorcet_dmc$ac_forward, condorcet_dmc$ac_reverse, condorcet_dmc$bc_forward, condorcet_dmc$bc_reverse),
+       `SimpCub integration` = c(kemeny_forward_out$ab$integral,
+                                 kemeny_reverse_out$ab$integral,
+                                 kemeny_forward_out$ac$integral,
+                                 kemeny_reverse_out$ac$integral,
+                                 kemeny_forward_out$bc$integral,
+                                 kemeny_reverse_out$bc$integral)) %>% 
+  mutate(`Ratio` = `SimpCub integration`/`Monte Carlo`) %>% 
+  kable() %>% 
+  kable_styling(full_width = F)
+```
+
+
+So things are not working correctly still. Let's investigate. 
+
+### Diagnosing the issue 
+
+I suspected there were points missing from the kemeny win region vertices.
+
+```{r inspect_wrv}
+wrv_forward <- cand_a_win_region_vertices_from_win_conditions(kemeny_ab_win_conditions_forward)
+wrv_forward
+wrv_reverse <- cand_a_win_region_vertices_from_win_conditions(kemeny_ab_win_conditions_reverse)
+wrv_reverse
+```
+
+In particular, I thought $(1/6, 1/6, \ldots, 1/6)$ should be in both regions. But then I realized that this point is a linear combination of the 4th, 5th, and 6th rows of each matrix, so it's not needed in `wrv`. 
+
+Now let's check the selection of vertices where the `binding_constraint` actually binds. This occurs in the function `simplices_to_integrate_from_win_region_vertices()`. 
+
+```{r choosing_vertices}
+binding_constraint_forward <- kemeny_ab_win_conditions_forward[1,]
+wrv_forward %*% matrix(binding_constraint_forward, ncol = 1)
+
+binding_constraint_reverse <- kemeny_ab_win_conditions_reverse[1,]
+wrv_reverse %*% matrix(binding_constraint_reverse, ncol = 1)
+```
+
+That indeed is one vertex where the constraint does not bind: in the forward version, $a$ and $b$ tie but $b$ loses outright to $c$, so $a$ and $b$ cannot be tied in the tie-breaker. 
+
+I looked through the process of producing this and it seems alright to me. So perhaps next I should check whether the simulation process has an error. It would be a symmetric error if so. 
 
 
 

@@ -20,9 +20,12 @@ cand_a_win_region_vertices_from_win_conditions <- function(win_conditions){
   positivity_part <- -diag(ncol(win_conditions))
 
   a1 <- rbind(-win_conditions, positivity_part)
+  # a1_char <- matrix(as.character(a1), nrow = nrow(a1), ncol = ncol(a1))
 
+  # represents the polyhedron described by the win_conditions and conditions on vote shares.
   cand_a_win_region_H <- rcdd::makeH(a1 = a1, b1 = rep(0, nrow(a1)), a2 = rep(1, ncol(win_conditions)), b2 = 1)
 
+  # gets the convex hull of points from H representation
   out <- rcdd::scdd(cand_a_win_region_H)
 
   out$output[, -c(1,2)] ## I am not sure what the first two columns are for.
@@ -53,9 +56,11 @@ simplices_to_integrate_from_win_region_vertices <- function(wrv, binding_constra
 
   if(length(vertices_with_ab_tie) == 0){stop("binding_constraint does not hold at any vertices in the win_region_vertices.")}
 
-  # get matrix describing convex hull of a's win region -- crucially, this is triangulated, i.e. in terms of simplices, so it's a good start for forming the S matrix.
+  # wrv is already the convex hull of the win region.
+  # but convexhulln() triangulates this, i.e. it describes the convex hull in terms of simplices
   # one row per simplex, one column per vertex
   # we drop a dimension when we do this, but it's fine -- we bring it back later
+
   tch <- geometry::convhulln(wrv[,-ncol(wrv)])
 
   # we want to select the simplices on the relevant facets.
