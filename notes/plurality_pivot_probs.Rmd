@@ -1,0 +1,16 @@
+---
+title: "Plurality pivot probability methods"
+author: "Andy Eggers"
+date: "24 August 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Objective 
+
+Here we will test the `plurality_pivot_probs()` function.  Still need to put in the grid-based approach, try the multivariate normal thing, and resolve any remaining issues. 
+
+

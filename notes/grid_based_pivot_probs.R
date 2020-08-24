@@ -1,4 +1,4 @@
-### grid-based estimation
+### grid-based estimation -- this is superseded by grid_based
 ###
 
 # TODO: this could be made not specific to Dirichlet. pass a function and parameters
