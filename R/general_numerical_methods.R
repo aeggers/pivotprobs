@@ -1,7 +1,8 @@
 ## general approach
 
 dirichlet_for_integration <- function(x, alpha){
-  gtools::ddirichlet(as.vector(x), alpha)/sqrt(length(alpha)) # correction for dimensionality
+  out <- gtools::ddirichlet(as.vector(x), alpha)/sqrt(length(alpha)) # correction for dimensionality
+  ifelse(is.nan(out) | is.infinite(out), 0, out)
 }
 
 # could integrate other functions
@@ -211,14 +212,63 @@ ordinal_shuffle_dirichlet_pivot_probs <- function(alpha, S, cand_names = NULL, s
 
 }
 
-positional_pivot_probs_general <- function(s = 1/2, alpha, cand_names = NULL, sep = "", tol = .01, ...){
+kemeny_pivot_probs_sc_based <- function(alpha, kemeny_forward_S = NULL, kemeny_reverse_S = NULL, cand_names = NULL, sep = "", ...){
 
+  if(is.null(kemeny_forward_S) | is.null(kemeny_reverse_S)){
+    forward_cycle_conditions <- rbind(
+      c(1,1,-1,-1,1,-1), # a beats b
+      c(1,-1,1,1,-1,-1), # b beats c
+      c(-1,-1,-1,1,1,1) # c beats a
+    )
+  }
+  if(is.null(kemeny_forward_S)){
+    kemeny_ab_win_conditions_forward <- rbind(
+      c(1,1,0,-1,0,-1),  # a's loss to c better than (equal to) b's loss to a
+      c(1,0,1,0,-1,-1), # a's loss to c better than c's loss to b
+      c(0,-1,1,1,-1,0),  # b's loss to a better than c's loss to b
+      forward_cycle_conditions
+    )
+    kemeny_forward_S <- S_array_from_win_conditions(kemeny_ab_win_conditions_forward)
+  }
+  if(is.null(kemeny_reverse_S)){
+    reverse_cycle_conditions <- -forward_cycle_conditions
+    kemeny_ab_win_conditions_reverse <- rbind(
+      c(0,1,-1,-1,1,0),  # a's loss to b better than (equal to) b's loss to c
+      c(1,1,0,-1,0,-1), # a's loss to b better than c's loss to a
+      c(1,0,1,0,-1,-1),  # b's loss to c better than c's loss to a
+      reverse_cycle_conditions
+    )
+    kemeny_reverse_S <- S_array_from_win_conditions(kemeny_ab_win_conditions_reverse)
+  }
+
+  # then we compute for each pair of candidates and forward and reverse
+  kemeny_forward_out <- ordinal_shuffle_dirichlet_pivot_probs(alpha, kemeny_forward_S, cand_names = cand_names, ...)
+  kemeny_reverse_out <- ordinal_shuffle_dirichlet_pivot_probs(alpha, kemeny_reverse_S, cand_names = cand_names, ...)
+
+  # but we need to swap the second component of
+  name_stem <- gsub("_forward", "", names(kemeny_forward_out)[2])
+  put_in_reverse <- kemeny_forward_out[[names(kemeny_forward_out)[2]]]
+  put_in_forward <- kemeny_forward_out[[names(kemeny_reverse_out)[2]]]
+  kemeny_forward_out[[names(kemeny_forward_out)[2]]] <- put_in_forward
+  kemeny_reverse_out[[names(kemeny_reverse_out)[2]]] <- put_in_reverse
+
+  list("forward" = kemeny_forward_out, "reverse" = kemeny_reverse_out)
+
+}
+
+
+positional_pivot_probs_general <- function(s = 1/2, alpha, cand_names = NULL, sep = "", tol = .01, report = F, ...){
+
+  if(report){cat("s = ", s, " alpha = ", alpha, " tol = ", tol, "\n")}
   wcs <- rbind(c(1-s, 1, s - 1, -1, s, -s),
                   c(1, 1-s, s, -s, s - 1, -1))
+  if(report){cat("wrv ")}
   wrv <- cand_a_win_region_vertices_from_win_conditions(wcs)
 
+  if(report){cat("S ")}
   S <- simplices_to_integrate_from_win_region_vertices(wrv, binding_constraint = wcs[1,])
 
+  if(report){cat("OS\n")}
   ordinal_shuffle_dirichlet_pivot_probs(alpha, S, cand_names = cand_names, sep = sep, tol = tol, ...)
 
 }

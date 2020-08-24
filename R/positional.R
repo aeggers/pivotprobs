@@ -27,11 +27,12 @@ positional_piv_probs_simulation <- function(sims = NULL, alpha_vec = NULL, N = 1
   score_b <- sims[,3] + sims[,4] + s*(sims[,1] + sims[,6])
   score_c <- sims[,5] + sims[,6] + s*(sims[,2] + sims[,4])
 
+  normalization_factor <- tol # used to be tol/sqrt(3)
   # this is direct Monte Carlo -- nothing fancy
   out <- list(
-    mean(score_a > score_b & score_a - score_b < tol & score_b > score_c)/(tol/sqrt(3)),
-    mean(score_a > score_c & score_a - score_c < tol & score_c > score_b)/(tol/sqrt(3)),
-    mean(score_b > score_c & score_b - score_c < tol & score_c > score_a)/(tol/sqrt(3))
+    mean(score_a > score_b & score_a - score_b < tol & score_b > score_c)/normalization_factor,
+    mean(score_a > score_c & score_a - score_c < tol & score_c > score_b)/normalization_factor,
+    mean(score_b > score_c & score_b - score_c < tol & score_c > score_a)/normalization_factor
   )
 
   names(out) <- c(paste0(cand_names[1], sep, cand_names[2]), paste0(cand_names[1], sep, cand_names[3]), paste0(cand_names[2], sep, cand_names[3]))

@@ -21,6 +21,115 @@ knitr::knit_hooks$set(webgl = hook_webgl)
 
 We want to check that we get the same results via Monte Carlo and numerical integration methods for some increasingly complicated problems. 
 
+### Background 
+
+#### Normalizing constant for Monte Carlo simulations 
+
+First, let's consider how we estimate pivot probabilities using simulation. All pivot probabilities involve an equation and possibly some inequalities; for example, a tie for first between $a$ and $b$ takes place when $v_a > v_c$ and $v_b > v_c$ and $v_a = v_b$. The equality of course never holds exactly in a set of simulated results with continuous vote shares, so we count the proportion of cases that fall within some window of equality, e.g. those where $|v_a  - v_b| < \varepsilon/2$. We then need to account for the size of the window we chose, i.e. $\varepsilon$. I had done this by dividing by $\varepsilon$. It turns out that this is not quite correct, and that there is no simple fix that applies across all cases we want to study.   
+
+For example, consider estimating the probability that $v_1 = .25$. We could approximate this by drawing a large number of simulated elections and computing the proportion where $|v_1 - .25| < \varepsilon/2$ or the proportion where $0 < v_1 - .25 < \varepsilon$; the result will clearly depend on $\varepsilon$, and it seemed reasonable at first to divide by $\varepsilon$ to approximate the integral because the width of the "target area" (and therefore the area) is a linear function of $\varepsilon$. But consider a horizontal band on the unit simplex containing the points where $v_1$ is between $a - \frac{\varepsilon}{2}$ and $a + \frac{\varepsilon}{2}$. Two points across from each other on this band would be $\left(a + \frac{\varepsilon}{2}, \frac{1 - \left( a  + \frac{\varepsilon}{2}\right)}{2}, \frac{1 - \left( a  + \frac{\varepsilon}{2}\right)}{2}\right)$ and  $\left(a - \frac{\varepsilon}{2}, \frac{1 - \left( a  - \frac{\varepsilon}{2}\right)}{2}, \frac{1 - \left( a  - \frac{\varepsilon}{2}\right)}{2}\right)$. The distance between these points is 
+$\sqrt{\varepsilon^2 + \frac{\varepsilon^2}{4} + \frac{\varepsilon^2}{4}} = \sqrt{\frac{3}{2}}\varepsilon$. So it seems that the "target area" increases by $\sqrt{\frac{3}{2}}$ units for every unit of $\varepsilon$. Intuitively, if we think of the simplex as flat, then we will underestimate the distance between points: as we move toward the top vertex, we are actually going uphill, which means a longer journey than if it were flat. 
+
+When we compute a tie for first between two candidates, by contrast, the proportion in the window increases by $\sqrt{2}$. To see this, note that two points on either side of the channel where candidates 1 and 2 get $x$ would be $(x - \varepsilon/2, x + \varepsilon/2, 1-2x)$ and $(x + \varepsilon/2, x - \varepsilon/2, 1-2x)$, and the distance between those two points is $\sqrt{\frac{\varepsilon^2}{2}} = \frac{\varepsilon}{\sqrt{2}}$
+
+We could go through all the cases we need to deal with, but this gets pretty challenging in high dimensions. 
+
+I can't think of a general solution to this. I thought I could estimate the probability for various values of $\varepsilon$ and extrapolate to where $\varepsilon = 0$, but that isn't correct (the intercept must be 0); extrapolating the values divided by $\varepsilon$ to where $\varepsilon = 0$ also sounds promising but does not address the issue. The issue, put differently, is that the probability of being within a window of $\varepsilon$ is $p \times C$, where $p$ is the pivot probability and $C$ is an unknown constant related to the volume of the polyhedron associated with a window of $\varepsilon$. So below I will just report results divided by $\varepsilon$, which will differ from the true results by a constant amount. I will need to keep thinking about a general solution. 
+
+
+
+<!-- Instead, I propose to have a general approach to computing pivot probabilities by simulation, which is to get estimates at a few values of $\varepsilon$ and use linear regression to estimate the limit of these estimates divided by $\varepsilon$ where $\varepsilon = 0$.  -->
+
+<!-- As an example, let's do the probability that $v_1 = .25$, the example above. Here we know what the normalizing constant should be, so we can compute the value. -->
+
+<!-- ```{r sim_approach_example, cache = T} -->
+<!-- sim_func <- function(sims, tol, a = .25){ -->
+<!--   mean(abs(sims[,1] - a) < tol/2) -->
+<!-- } -->
+
+<!-- N <- 1000000 -->
+<!-- sims <- gtools::rdirichlet(N, alpha = rep(1,3)) -->
+<!-- tibble(tol = seq(.005, .03, by = .005)) %>%  -->
+<!--   mutate(piw = pmap(., sim_func, sims = sims) %>% as.numeric()) -> df  -->
+
+<!-- df %>%  -->
+<!--   mutate(norm_piw = piw/tol) %>%  -->
+<!--   ggplot(aes(x = tol, y = norm_piw)) +  -->
+<!--   geom_point() -->
+<!-- ``` -->
+
+<!-- Or how about case of a tie between two candidates:  -->
+
+<!-- ```{r sim_approach_example_2, cache = T} -->
+<!-- sim_func_tie <- function(sims, tol){ -->
+<!--   mean(abs(sims[,1] - sims[,2]) < tol/2) -->
+<!-- } -->
+
+<!-- tibble(tol = seq(.005, .03, by = .005)) %>%  -->
+<!--   mutate(piw = pmap(., sim_func_tie, sims = sims) %>% as.numeric()) -> df2  -->
+
+<!-- df2 %>%  -->
+<!--   mutate(norm_piw = piw/tol) %>%  -->
+<!--   ggplot(aes(x = tol, y = norm_piw)) +  -->
+<!--   geom_point() -->
+<!-- ``` -->
+
+
+<!-- ```{r checkit, eval=F} -->
+<!-- pp <- lm(I(piw/tol) ~ tol, data = df) %>% broom::tidy() %>% filter(term == "(Intercept)") %>% pull(estimate) -->
+
+<!-- df %>% mutate(pp = piw/(tol*sqrt(3/2))) -->
+
+<!-- SimplicialCubature::adaptIntegrateSimplex(dir_fn, S = cbind(c(.25, .75, 0), c(.25, 0, .75)), alpha = rep(1,3)) -->
+<!-- ``` -->
+
+
+<!-- Start with a problem in three dimensions. We will look at the relationship between the probability of a result being within $\varepsilon$ of some condition and the value of $\varepsilon$. As we increase $\varepsilon$ the probability should increase. If it goes up linearly, then we can approximate the integral (i.e. the limit of the probability of being in the window as $\varepsilon$ goes to zero) by dividing by $\varepsilon$. -->
+
+
+
+<!-- The question is how we can detect this issue. I thought we could detect it by looking at how the probability of being within $\varepsilon$ depended on $\varepsilon$. But note that this derivative is actually the pivot probability (which is unknown) times the derivative of the "width" of the target area with respect to $\varepsilon$. So in general this will not work. We can of course compare to the analytical solution.  -->
+
+<!-- It's discouraging, though, because it appears that the normalizing constant depends on the question in intricate ways. For example, consider the event that $v_1 = b v_2$. Then I think the normalizing constant is $\frac{\sqrt{2}}{b} \varepsilon$. Thinking about the various complicated pivot probabilities we have (positional, Kemeny, etc) it would be annoying to work out all the normalizing constants.     -->
+
+<!-- So as a first step we want to make sure that our simulation-based results are linearly related to our analytical result. If we can work out the normalizing constant, great, we expect the results to be exactly the same. Otherwise, we can try to work it out or be content that the simulation is off by a fixed multiplicative factor, and we will use the analytical results.  -->
+
+
+
+#### Normalizing constant for Dirichlet distribution 
+
+I would have expected the Dirichlet distribution to integrate to 1 over the whole unit simplex. But this is not the case. Instead, the integral over the whole unit simplex is $\sqrt{d}$, where $d$ is the number of dimensions:  
+
+```{r unity_checks, cache = T}
+# the Dirichlet with no correction
+dir_fnx <- function(x, alpha){
+  gtools::ddirichlet(as.vector(x), alpha = alpha)
+}
+
+integral_over_unit_simplex <- function(d){
+  SimplicialCubature::adaptIntegrateSimplex(dir_fnx, S = diag(d), alpha = rep(1, d))$integral
+}
+
+tibble(d = 2:7) %>% 
+  mutate(integral = pmap(., integral_over_unit_simplex)) %>% 
+  unnest(cols = c(integral)) -> integrals 
+integrals
+
+tibble(d = seq(2, 7, by = .1)) %>% 
+  mutate(integral = sqrt(d)) -> df2 
+df2 
+```
+
+```{r sep_for_debug}
+integrals %>% 
+  ggplot(aes(x = d, y = integral)) + 
+  geom_point() + 
+  geom_line(data = df2, aes(x = d, y = integral), col = "blue") 
+```
+
+This implies that we need to apply a correction that divides the Dirichlet density by $\sqrt{d}$. 
+
+
 
 ### Problem 1 
 
@@ -45,11 +154,11 @@ tol <- .01 # window defining a tie
 dmc_result <- mean(sims[,1] > sims[,3] & #1  beats 3
                      sims[,2] > sims[,3] & # 2 beats 3 
                      abs(sims[,1] - sims[,2]) < tol/2 # 1 and 2 are within tol
-                   )/(tol/sqrt(2)) # normalize by "channel width" to approximate the integral we want 
+                   )/tol # actually we should normalize by sqrt(2)  
 dmc_result 
 ```
 
-Note that a "near tie" here means 1 and 2 being within `tol` of each other. We then divide by `tol/sqrt(2)`, which is the width of the channel that is being considered a close election. We divide by this width because we are interested in the density at a single width-0 strip of this channel. The width of the channel is `tol/sqrt(2)` (not `tol`, as I initially thought) because two points on either side of the channel where candidates 1 and 2 get $x$ would be $(x - a/2, x + a/2, 1-2x)$ and $(x + a/2, x - a/2, 1-2x)$, and the distance between those two points is $\sqrt{\frac{a^2}{2}} = \frac{a}{\sqrt{2}}$.   
+Note that a "near tie" here means 1 and 2 being within `tol` of each other. We then divide by `tol`, though the correct normalizer is `tol/sqrt(2)`, which is the width of the channel that is being considered a close election. We divide by this width because we are interested in the density at a single width-0 strip of this channel. The width of the channel is `tol/sqrt(2)` (not `tol`, as I initially thought) because two points on either side of the channel where candidates 1 and 2 get $x$ would be $(x - a/2, x + a/2, 1-2x)$ and $(x + a/2, x - a/2, 1-2x)$, and the distance between those two points is $\sqrt{\frac{a^2}{2}} = \frac{a}{\sqrt{2}}$.   
 
 #### Numerical integration via regular grid 
 
@@ -66,8 +175,10 @@ nigv_result <- sum(fn_values)*segment_length
 nigv_result
 ```
 
-This agrees with the simulation result. Note the $\sqrt{3}$ correction to the Dirichlet density. This is because the integral over the entire $d$-dimensional simplex is $\sqrt{d}$ (see below) while the proportion of simulation draws on the unit simplex is always 1. 
-It seems to me an error in the definition of the Dirichlet density if, when  integrated over the entire unit simplex, it returns $\sqrt{d}$. So I add that correction. 
+This agrees with the simulation result after the correction is applied. Note the $\sqrt{3}$ correction to the Dirichlet density, which is explained above. 
+
+<!-- . This is because the integral over the entire $d$-dimensional simplex is $\sqrt{d}$ (see below) while the proportion of simulation draws on the unit simplex is always 1.  -->
+<!-- It seems to me an error in the definition of the Dirichlet density if, when  integrated over the entire unit simplex, it returns $\sqrt{d}$. So I add that correction.  -->
 
 
 #### Numerical integration via `SimplicialCubature`  
@@ -107,8 +218,11 @@ sc_result$integral
 #### Comparison 
 
 ```{r comp_table_1}
-df <- data.frame(`Tie between` = c("ab"), `Monte Carlo` = dmc_result, `Manual integration` = nigv_result, `SimpCub integration` = sc_result$integral)
-kable(df) %>% 
+tibble(`Tie between` = c("ab"), `Monte Carlo` = dmc_result,
+                 `Monte Carlo normalized` = dmc_result*sqrt(2), 
+                 `Manual integration` = nigv_result, 
+                 `SimpCub integration` = sc_result$integral) %>% 
+  kable() %>% 
   kable_styling(full_width = F)
 ```
 
@@ -123,12 +237,13 @@ First we define a function:
 ```{r three_sims_func}
 ab_tie_for_first_MC <- function(sims, tol = .01){
   row_max <- apply(sims, 1, max)
-  mean((sims[,1] == row_max | sims[,2] == row_max) & abs(sims[,1] - sims[,2]) < tol/2)/(tol/sqrt(2))  
+  mean((sims[,1] == row_max | sims[,2] == row_max) & abs(sims[,1] - sims[,2]) < tol/2)/tol  
 }
 ```
 
 Then we do the computations: 
 ```{r three_sims_cal, cache = T}
+# ch
 dmc_3 <- c(ab_tie_for_first_MC(sims), ab_tie_for_first_MC(sims[,c(1,3,2)]), ab_tie_for_first_MC(sims[,c(2,3,1)]))
 dmc_3
 ```
@@ -169,7 +284,8 @@ sc_3
 #### Comparison 
 
 ```{r comp_table_2}
-df <- tibble(`Tie between` = c("ab", "ac", "bc"), `Monte Carlo` = dmc_3, `Manual integration` = nivg_3, `SimpCub integration` = sc_3)
+df <- tibble(`Tie between` = c("ab", "ac", "bc"), `Monte Carlo` = dmc_3, `Monte Carlo normalized` = dmc_3*sqrt(2),
+               `Manual integration` = nivg_3, `SimpCub integration` = sc_3)
 kable(df) %>% 
   kable_styling(full_width = F)
 ```
@@ -181,6 +297,8 @@ What is the probability of each candidate receiving at least 50\% of the vote, g
 
 
 #### Direct Monte Carlo
+
+Here there are no normalization issues with the Monte Carlo.
 
 ```{r sims_more_than_50, cache = T}
 a_over_50 <- mean(sims[,1] > .5)
@@ -237,6 +355,7 @@ plurality_tie_probs_from_sims <- function(sims, tol = .01, sep = ""){
 Then generate the simulations and apply the function: 
 
 ```{r dmc_4, cache = T}
+# ch
 N <- 10000000
 sims4 <- gtools::rdirichlet(N, alpha4)
 dmc_4 <- plurality_tie_probs_from_sims(sims4)
@@ -247,7 +366,7 @@ dmc_4 <- plurality_tie_probs_from_sims(sims4)
 
 To compute the probability of a tie between $a$ and $b$, we need to integrate over a quadrilateral facet with the vertices $(1/2, 1/2, 0, 0)$, $(1/3, 1/3, 1/3, 0)$, $(1/3, 1/3, 0, 1/3)$, $(1/4, 1/4, 1/4, 1/4)$. 
 
-`SimplicialCubature` allows us to specify `S` as an array, with each layer identifying the vertices of one simplex. 
+`SimplicialCubature` requires the area of integration to be specified as a set of simplices. We do this by creating a matrix for each simplex and combining them as an array. 
 
 So in this case `S` is: 
 
@@ -287,35 +406,22 @@ sc_4 <- plurality_tie_probs_from_sc(alpha4, S = S4)
 #### Comparison
 
 ```{r comp_table_4}
-df <- tibble(`Candidate pair` = names(sc_4), `Monte Carlo` = unlist(dmc_4), `SimpCub integration` = unlist(sc_4), Ratio = unlist(sc_4)/unlist(dmc_4))
-kable(df) %>% 
+tibble(`Candidate pair` = names(sc_4), 
+          `Monte Carlo` = unlist(dmc_4), 
+          `Monte Carlo normalized` = unlist(dmc_4)*sqrt(2),
+          `SimpCub integration` = unlist(sc_4)) %>% 
+  mutate(Ratio = `SimpCub integration`/`Monte Carlo normalized`) %>% 
+  kable() %>% 
   kable_styling(full_width = F)
 ```
 
 
 
-<!-- One thing to check: what is the integral over 4 dimensions? Maybe the correction I need to apply depends on the number of dimensions. -->
-
-<!-- ```{r unity_checks, cache = T} -->
-<!-- # the Dirichlet with no correction -->
-<!-- dir_fnx <- function(x, alpha){ -->
-<!--   gtools::ddirichlet(as.vector(x), alpha = alpha) -->
-<!-- }  -->
-<!-- unity_2 <- SimplicialCubature::adaptIntegrateSimplex(dir_fnx, S = diag(2), alpha = c(1,1)) -->
-<!-- unity_3 <- SimplicialCubature::adaptIntegrateSimplex(dir_fnx, S = diag(3), alpha = c(1,1,1)) -->
-<!-- unity_4 <- SimplicialCubature::adaptIntegrateSimplex(dir_fnx, S = diag(4), alpha = c(1,1,1,1)) -->
-<!-- unity_5 <- SimplicialCubature::adaptIntegrateSimplex(dir_fnx, S = diag(5), alpha = c(1,1,1,1,1)) -->
-<!-- unity_6 <- SimplicialCubature::adaptIntegrateSimplex(dir_fnx, S = diag(6), alpha = c(1,1,1,1,1,1)) -->
-<!-- plot(2:6, c(unity_2$integral, unity_3$integral, unity_4$integral, unity_5$integral, unity_6$integral), type = "b", pch = 19, xlab = "Dimensions", ylab = "Integral over entire unit simplex") -->
-
-<!-- ``` -->
-
-<!-- Yes it does. So I need to apply a correction in the function that depends on the dimension of `alpha`.  Get to that next.  -->
 
 
 ## Extending `SimplicialCubature`
 
-I have developed some methods for applying `SimplicialCubature` to an arbitrary voting system. The step is to extract the `S` array from a matrix of "winning conditions", expressed as coefficients on inequalities relative ot zero. For example, the conditions for winning in a four-candidate plurality contest could be written 
+Okay, here is the cool part. We want to get pivot probabilities for arbitrary voting systems. Having shown that we can use `SimplicialCubature` for the integration, we now require a way to get the `S` array for each kind of pivot event. My approach is to start from a matrix of "winning conditions", expressed as coefficients on inequalities relative to zero. For example, the conditions for winning in a four-candidate plurality contest could be written 
 
 \begin{array}
 v_1 - v_2 >=& 0 \\
@@ -323,15 +429,15 @@ v_1 -  v_3 >=& 0 \\
 v_1 - v_4 >=& 0. \\
 \end{array}
 
-I represent these as a matrix as follows: 
+I represent these in matrix form as follows: 
 
 ```{r pwv4}
 plurality_win_conditions_4 <- rbind(c(1,-1,0,0), c(1,0,-1,0), c(1,0,0,-1)) 
 plurality_win_conditions_4
 ```
 
-Each row states a condition $\beta$ such that $\mathbf{v}\beta \geq 0$ should hold if candidate 1 is going to win. Then the `cand_a_win_region_vertices_from_win_conditions()` function returns the vertices of candidate 1's "win region" given the matrix of win conditions, and `simplices_to_integrate_from_win_region_vertices()` takes these vertices plus a single win condition that must bind with equality and returns an `S` array representing the simplices on facets of candidate 1's win region where the given condition binds with equality. Putting this all together, 
-`S_array_from_win_conditions()` takes a matrix of win conditions and returns the `S` array that describes the facets where the first list win condition binds with equality. To illustrate with a four-candidate plurality contest:
+Each row states a condition $\beta$ such that $\mathbf{v}\beta \geq 0$ should hold when candidate 1 wins. Then the `cand_a_win_region_vertices_from_win_conditions()` function returns the vertices of candidate 1's "win region" given the matrix of win conditions, and `simplices_to_integrate_from_win_region_vertices()` takes these vertices plus a single win condition that must bind with equality and returns an `S` array representing the simplices on facets of candidate 1's win region where the given condition binds with equality. Putting this all together, 
+`S_array_from_win_conditions()` takes a matrix of win conditions and returns the `S` array that describes the facets where the first win condition binds with equality. To illustrate with a four-candidate plurality contest:
 
 ```{r S_from_wc}
 source("R/general_numerical_methods.R")
@@ -353,7 +459,7 @@ S_bc
 
 ```
 
-Now we can test that we produce the right results when generating the `S` matrix from a matrix of win conditions. This allows us to go into higher-dimensional cases where we might otherwise struggle to generate the `S` array  
+Now we can test that we produce the right results when generating the `S` array from a matrix of win conditions. This allows us to go into higher-dimensional cases where we might otherwise struggle to generate the `S` array.  
 
 ### Problem 5
 
@@ -362,6 +468,7 @@ Compute the probability of each tie for first in a five-candidate plurality race
 #### Direct Monte Carlo
 
 ```{r problem_5_sims, cache = T}
+# ch
 alpha5 <- c(10, 8, 6, 4, 3)
 sims5 <- gtools::rdirichlet(1000000, alpha5)
 system.time(pp_sims_5 <- plurality_tie_probs_from_sims(sims5))
@@ -379,7 +486,9 @@ system.time(pp_sc_5 <- plurality_tie_probs_from_sc(alpha5, S_5))
 #### Comparison 
 
 ```{r comparison_5}
-tibble(`Candidate pair` = names(pp_sc_5), `Monte Carlo` = unlist(pp_sims_5), `SimpCub integration` = unlist(pp_sc_5), Ratio = unlist(pp_sc_5)/unlist(pp_sims_5)) %>% 
+tibble(`Candidate pair` = names(pp_sc_5), `Monte Carlo` = unlist(pp_sims_5),
+       `Monte Carlo normalized` = unlist(pp_sims_5)*sqrt(2), `SimpCub integration` = unlist(pp_sc_5)) %>% 
+  mutate(Ratio = `SimpCub integration`/`Monte Carlo normalized`) %>% 
   kable() %>% 
   kable_styling(full_width = F)
 ```
@@ -403,6 +512,11 @@ tibble(`Candidate pair` = names(pp_sc_5), `Monte Carlo` = unlist(pp_sims_5), `Si
 Compute the probability of each tie for first in a three-candidate Borda count contest with results (described by the proportion of ballots with rank ordering $abc, acb, bac, bca, cab, cba$) distributed according to $\text{Dirichlet}(10, 6, 4, 5, 3, 11)$ .
 
 #### Direct Monte Carlo
+
+I used some simulations to try to work out the normalization factor for Borda Count, but I think now this didn't make sense. (I'm not sure why it gives the right answer.) I leave it here for later investigation.
+
+##### Possibly incorrect normalization procedure
+
 
 In the plurality case, we established that the target area increased by $\sqrt{2}$ for each increase in the width of the window we used to locate ties for first. Some initial testing indicated a similar issue comes up with Borda count when we look for two scores to be tied for first, but that $\sqrt{2}$ is not the correct factor. To find the correct factor without doing any serious geometry, we do the following experiment: for a fixed set of simulations, how much does the probability of two scores being within `tol` increase as we vary `tol`? In the plurality case it should have increased by approximately $\sqrt{2}$. What is it here? 
 
@@ -429,9 +543,14 @@ df %>% ggplot(aes(x = tol, y = piw)) + geom_point() + geom_abline(slope = 1, int
 
 ```
 
-So the correction factor is $\sqrt{3}$. We apply that in the function `positional_piv_probs_simulation()`, which takes a set of simulations (6 ballot shares) and a value of `s` (Borda has `s = .5`) and returns the three pivot probabilities. (I draw a new sample so that the time comparison is more appropriate.)
+So the correction factor is $\sqrt{3}$. I'm not sure, though, that this really makes sense: the slope is surely the pivot probability times the normalizing factor, i.e. it would only go up with slope 1 if the pivot probability was 1. But perhaps I am missing something.  
+
+##### Resuming main analysis 
+
+We apply that in the function `positional_piv_probs_simulation()`, which takes a set of simulations (6 ballot shares) and a value of `s` (Borda has `s = .5`) and returns the three pivot probabilities. (I draw a new sample so that the time comparison is more appropriate.)
 
 ```{r bc_sims, cache = T}
+# ch
 source("R/positional.R")
 system.time(pp_bc <- positional_piv_probs_simulation(
   gtools::rdirichlet(1000000, alpha = bc_alpha))
@@ -451,12 +570,8 @@ system.time(pp_sc_bc_absError_01 <- ordinal_shuffle_dirichlet_pivot_probs(bc_alp
 The `tol` and `absError` arguments don't seem to have any effect on speed here, nor do they affect the results. Is it because they didn't complete the computations? Yes.
 
 ```{r report_bc_sc}
-pp_sc_bc$ab$message
-pp_sc_bc$ab$functionEvaluations
-pp_sc_bc_tol_1$ab$message
-pp_sc_bc_tol_1$ab$functionEvaluations
-pp_sc_bc_absError_01$ab$message
-pp_sc_bc_absError_01$ab$functionEvaluations
+c(pp_sc_bc$ab$message, pp_sc_bc_tol_1$ab$message, pp_sc_bc_absError_01$ab$message)
+c(pp_sc_bc$ab$functionEvaluations, pp_sc_bc_tol_1$ab$functionEvaluations, pp_sc_bc_absError_01$ab$functionEvaluations)
 ```
 
 So now I increase the maximum number of function evaluations: 
@@ -488,7 +603,7 @@ tibble(`Candidate pair` = names(pp_sc_bc), `Monte Carlo` = unlist(pp_bc), `SimpC
   kable_styling(full_width = F)
 ```
 
-Conclusion: the method matches the simulation results, but it takes a large number of function evaluations so it is slow. It can be sped up by specifying `tol = .1`. In this case one would probably prefer the simulation approach because it's faster. But can we think of cases where we need some precision on a very low probability event to get the polling algorithm to work correctly? Suppose candidate $a$ is way ahead of the other two, so that all of the pivot probabilities are really low, and consider a voter who strongly prefers $a$ to $b$ and $c$. The strategic move is to rank the likely second-place candidate last, and this could depend on random variation in the simulations. You could argue that we don't really care what happens in that case, but it's good to have a more complete solution. 
+Conclusion: the method matches the simulation results (up to a normalization factor), but it takes a large number of function evaluations so it is slow. It can be sped up by specifying `tol = .1`. If we don't care about normalization, we might prefer the faster simulation approach. But we can think of cases where it is important to have some precision on a very low probability event to make the polling algorithm work correctly. Suppose candidate $a$ is way ahead of the other two, so that all of the pivot probabilities are really low, and consider a voter who strongly prefers $a$ to $b$ and $c$. The strategic move is to rank the likely second-place candidate last, and this could depend on random variation in the simulations. You could argue that we don't really care what happens in that case, but it's good to have a more complete solution. 
 
 I wonder how the numerical result varies with `tol`. 
 
@@ -505,7 +620,7 @@ data.frame(tol = c(.0001, .001, .01, .1, .2, .3)) %>%
   unnest(sc_result) -> df2
 ```
 
-```{r tol_plot}
+```{r tol_plot, cache = T}
 df2 %>% filter(sc_result_id == "integral") %>% 
   mutate(tolf = factor(tol)) %>% 
   ggplot(aes(x = tolf, y = sc_result, col = pp, group = pp)) + 
@@ -527,6 +642,131 @@ df2 %>% filter(sc_result_id == "functionEvaluations") %>%
 This suggests that with pretty high `tol` we could do fine. It's tricky to figure out which is actually better as we don't know the circumstances we will be in.  
 
 
+### Checking positional methods 
+
+Let's do a large number of comparisons.
+
+To set this up I want a list of alphas. 
+
+```{r positional_comparisons}
+set.seed(12345)
+J <- 20
+v_mat <- gtools::rdirichlet(J, alpha = c(4,1, 2, 2, 2, 5))
+alpha_mat <- matrix(.8, nrow = J, ncol = 6) + v_mat*30
+
+# I want a list of alpha arguments 
+alpha_list <- as.list(as.data.frame(t(alpha_mat)))
+
+# getting a dataframe of simulated elections for each alpha vector 
+tibble(
+  j = 1:length(alpha_list), 
+  n = 1000000, 
+  alpha = alpha_list) %>% 
+  mutate(sims = pmap({.} %>% select(-j), gtools::rdirichlet)) -> sim_tibble
+
+# note that {.} is because of this error -- magrittr creates an anonymous function.  https://stackoverflow.com/questions/50729045/meaning-of-error-using-shorthand-inside-dplyr-function
+# is . otherwise a dplyr thing, or magrittr? 
+
+# for each simulation dataframe, and each positional s, get the simulation-based estimates  
+expand_grid(s = c(0, 1/4, 1/2, 3/4, 1), sim_tibble) %>% 
+  mutate(sim_based = pmap({.} %>% select(sims, alpha, s), positional_piv_probs_simulation)) -> sim_df 
+
+expand_grid(s = c(0, 1/4, 1/2, 3/4, 1), sim_tibble) %>%
+  mutate(sc_based_01 = pmap({.} %>% select(alpha, s), positional_pivot_probs_general, tol = .1, maxEvals = 30000, report = T)) -> sc_df 
+
+
+
+
+# got an error here: 
+#   Error in if ((NMRL > SMALL * NMBS) & (K < RLS)) { : 
+#   missing value where TRUE/FALSE needed
+# I wonder if that's the rational arithmetic issue. 
+
+sim_df %>% 
+  select(-sims) %>%
+  unnest_longer(sim_based) %>% 
+  rename(pp = sim_based_id,
+         value = sim_based) -> sim_pps
+
+sc_df %>% 
+  select(-sims, -n) %>%
+  unnest_longer(sc_based_01) %>% 
+  rename(pp = sc_based_01_id) %>% 
+  unnest_longer(sc_based_01) -> sc_pps
+
+sc_pps %>% filter(sc_based_01_id == "message") %>% 
+  unnest(sc_based_01) -> sc_messages 
+
+sc_pps %>% filter(sc_based_01_id == "integral") %>% 
+  unnest(sc_based_01) %>% 
+  rename(value = sc_based_01) %>% 
+  select(-sc_based_01_id) -> sc_pps_2
+
+sc_pps_2 %>% 
+  left_join(sim_pps, by = c("s", "j", "pp"), suffix = c("_cubature", "_monte_carlo")) -> df_for_plot
+
+
+df_for_plot %>% 
+  ggplot(aes(x = value_monte_carlo, y = value_cubature, col = factor(s))) + 
+  geom_point() + 
+  geom_abline(intercept = 0, slope = sqrt(3), linetype = 2) + 
+  geom_abline(intercept = 0, slope = sqrt(4), linetype = 2) +
+  geom_abline(intercept = 0, slope = sqrt(3.5), linetype = 2, col = "blue")
+  
+df_for_plot %>% 
+  ggplot(aes(x = value_monte_carlo, y = value_cubature, col = factor(s))) + 
+  geom_point() + 
+  scale_x_log10() + 
+  scale_y_log10() + 
+  geom_abline(intercept = .5*log10(3), slope = 1, linetype = 2) + 
+  geom_abline(intercept = .5*log10(4), slope = 1, linetype = 2) 
+
+
+df_for_plot %>% 
+  mutate(ratio = value_cubature/value_monte_carlo) %>%  
+  ggplot(aes(x = ratio)) + 
+  facet_wrap(. ~ factor(s)) + 
+  geom_histogram(alpha = .3) + 
+  geom_vline(xintercept = c(sqrt(3), sqrt(4))) + 
+  coord_cartesian(xlim = c(1.25,2.5))
+
+lm(value_cubature ~ value_monte_carlo + as.factor(s), data = df_for_plot) %>% broom::tidy()
+
+## So it is clear that 
+  ## they are returning the same thing up to a constant. (that's good.) 
+  ## the constant depends on s, which I think is an issue with the simulation side. 
+
+## Another way to check 
+# compare plurality to positional with s = 0.
+
+plurality_positional_sim <- positional_piv_probs_simulation(gtools::rdirichlet(1000000, alpha = rep(1,6)), s = 0)
+
+plurality_plurality_sim <- plurality_tie_probs_from_sims(gtools::rdirichlet(1000000, alpha = rep(2,3)))
+# those two agree. 
+
+
+plurality_positional <- positional_pivot_probs_general(s = 0, alpha = rep(1, 6))
+plurality_plurality <- plurality_pivot_probs_dirichlet(alpha = rep(2, 3))
+# these don't -- off by sqrt(2). 
+
+## # if the integration stuff was correct, they would yield the same thing with s = 0. but they don't: the positional integration version is sqrt(2) times higher than the plurality integration one
+unlist(map(plurality_positional, "integral"))/unlist(map(plurality_plurality, "integral"))
+
+## also, the plurality integration one is sqrt(2) times higher than the simulation one. (this could be fine -- the channel is wider than we think.)
+unlist(map(plurality_plurality, "integral"))/unlist(plurality_positional_sim)
+
+## Note also that the correction relative to simulation depends on s: the positional integration result is 2x as high as the simulation when s = 0,1, but sqrt(3) times as high when s = .5. 
+
+## Could this be because the correction we make to the Dirichlet density function to make it integrate to 1 is not correct? 
+## the correction on the Dirichlet density is intended to make the integral be 1 over the whole unit simplex. the correction factor depends on the dimension (length) of alpha. when s = 0, we effectively have only 3 dimensions, so maybe the correction should actually be sqrt(3) instead of sqrt(6). But if we applied sqrt(3) the positional version would be even bigger, i.e. a bigger discrepancy.   
+
+#  we could leave this as a mystery and work instead on the plurality comparison, or Condorcet. Maybe something will become clearer. 
+
+```
+
+we draw an $s$ 
+
+
 ### A Condorcet problem 
 
 Now we seek to compute pivot probabilities for Condorcet methods. First, compute the probability of a decisive tie (i.e. one that does not result in a cycle) between each pair of candidates given `alpha` vector of `c(10, 5, 6,7, 3,9)`.
@@ -535,47 +775,52 @@ Now we seek to compute pivot probabilities for Condorcet methods. First, compute
 
 I wrote a function for computing Condorcet pivot probabilities from a set of simulations. 
 
-To set the normalizing factor, we again check to see how the probability of being in the crucial area depends on the parameter `tol`.  
-
-```{r fix_sims_condorcet, cache = T}
-# draw simulations 
-alpha_condorcet <- c(10, 5, 6,7, 3,9)
-sims <- gtools::rdirichlet(1000000, alpha = alpha_condorcet)
-
-pairwise_mat <- cbind(apply(sims[,c(1,2,5)], 1, sum),
-                      apply(sims[,c(1,2,3)], 1, sum),
-                      apply(sims[,c(1,3,4)], 1, sum))
-
-# function for a decisive tie within a window defined by tol
-pr_in_window_condorcet <- function(tol, sims){
-  mean(sims[,2] > 1/2 & # a beats c
-         sims[,3] > 1/2 & # b beats c   
-         abs(sims[,1] - 1/2) < tol/2) # a and b close 
-}
-
-# apply that function across several values of tol
-data.frame(tol = seq(.005, .03, by = .005)) %>% 
-  mutate(piw = as.numeric(pmap(., pr_in_window_condorcet, sims = pairwise_mat))) -> df 
-```
-
-```{r plot_condorcet_fix}
-# plot the result along with a line of slope 1 and a line of slope sqrt(3)
-df %>% ggplot(aes(x = tol, y = piw)) + 
-  geom_point() + 
-  geom_abline(slope = 1, intercept = 0, linetype = 2) + 
-  geom_abline(slope = sqrt(2), intercept = 0, linetype = 2, col = "yellow") +   geom_abline(slope = sqrt(3), intercept = 0, linetype = 2, col = "orange") +
-  geom_abline(slope = sqrt(6)/2, intercept = 0, linetype = 2, col = "red")
-  
-```
+I did some stuff to set the normalizing factor, but as noted above I am not sure if this makes sense or not. So I will skip for now. 
 
 
-It seems to be $\sqrt{8}$ i.e. $2\sqrt{2}$. But the normalizer that makes the simulations and numerical results agree is $\frac{\sqrt{6}}{2}$. I need to clarify this. 
+<!-- To set the normalizing factor, we again check to see how the probability of being in the crucial area depends on the parameter `tol`.   -->
 
-The function (using that normalizing factor) also computes Kemeny pivot probabilities, and we will use those below. 
+<!-- ```{r fix_sims_condorcet, cache = T} -->
+<!-- # draw simulations  -->
+<!-- alpha_condorcet <- c(10, 5, 6,7, 3,9) -->
+<!-- sims <- gtools::rdirichlet(1000000, alpha = alpha_condorcet) -->
+
+<!-- pairwise_mat <- cbind(apply(sims[,c(1,2,5)], 1, sum), -->
+<!--                       apply(sims[,c(1,2,3)], 1, sum), -->
+<!--                       apply(sims[,c(1,3,4)], 1, sum)) -->
+
+<!-- # function for a decisive tie within a window defined by tol -->
+<!-- pr_in_window_condorcet <- function(tol, sims){ -->
+<!--   mean(sims[,2] > 1/2 & # a beats c -->
+<!--          sims[,3] > 1/2 & # b beats c    -->
+<!--          abs(sims[,1] - 1/2) < tol/2) # a and b close  -->
+<!-- } -->
+
+<!-- # apply that function across several values of tol -->
+<!-- data.frame(tol = seq(.005, .03, by = .005)) %>%  -->
+<!--   mutate(piw = as.numeric(pmap(., pr_in_window_condorcet, sims = pairwise_mat))) -> df  -->
+<!-- ``` -->
+
+<!-- ```{r plot_condorcet_fix} -->
+<!-- # plot the result along with a line of slope 1 and a line of slope sqrt(3) -->
+<!-- df %>% ggplot(aes(x = tol, y = piw)) +  -->
+<!--   geom_point() +  -->
+<!--   geom_abline(slope = 1, intercept = 0, linetype = 2) +  -->
+<!--   geom_abline(slope = sqrt(2), intercept = 0, linetype = 2, col = "yellow") +   geom_abline(slope = sqrt(3), intercept = 0, linetype = 2, col = "orange") + -->
+<!--   geom_abline(slope = sqrt(6)/2, intercept = 0, linetype = 2, col = "red") -->
+
+<!-- ``` -->
+
+
+<!-- It seems to be $\sqrt{8}$ i.e. $2\sqrt{2}$. But the normalizer that makes the simulations and numerical results agree is $\frac{\sqrt{6}}{2}$. I need to clarify this.  -->
+
+The function with no normalizing also computes Kemeny pivot probabilities, and we will use those below. 
 
 
 ```{r dmc_condorcet, cache = T}
+# change
 source("R/condorcet.R")
+alpha_condorcet <- c(10, 5, 6,7, 3,9)
 condorcet_sims <- gtools::rdirichlet(1000000, alpha_condorcet)
 condorcet_dmc <- condorcet_pivot_probs_from_sims(condorcet_sims)
 ```
@@ -599,9 +844,7 @@ condorcet_out <- ordinal_shuffle_dirichlet_pivot_probs(alpha_condorcet, condorce
 Did we hit the `maxEvals` ceiling? No:
 
 ```{r check_maxevals}
-condorcet_out$ab$message
-condorcet_out$ac$message
-condorcet_out$bc$message
+c(condorcet_out$ab$message, condorcet_out$ac$message, condorcet_out$bc$message)
 ```
 
 #### Comparison
@@ -614,9 +857,12 @@ tibble(`Candidate pair` = names(condorcet_out),
        `SimpCub integration` = c(condorcet_out$ab$integral,
                                  condorcet_out$ac$integral,
                                  condorcet_out$bc$integral)) %>% 
+       mutate(`Ratio` = `SimpCub integration`/`Monte Carlo`) %>% 
   kable() %>% 
   kable_styling(full_width = F)
 ```
+
+Looks like the normalizing factor is $\sqrt(6)/2$. 
 
 ### Cyclical tie-breaking events: Kemeny with flat distribution 
 
@@ -624,11 +870,57 @@ Now we seek to compute pivot probabilities for a cycle-breaking procedure in whi
 
 #### Direct Monte Carlo 
 
+<!-- Let's check whether the normalizing factor is the same here:  -->
+
+<!-- ```{r fix_sims_condorcet_kem, cache = T} -->
+<!-- # draw simulations  -->
+<!-- # ch -->
+<!-- alpha_condorcet <- c(10, 5, 6,7, 3,9) -->
+<!-- sims <- gtools::rdirichlet(1000000, alpha = alpha_condorcet) -->
+
+<!-- pairwise_mat <- cbind(apply(sims[,c(1,2,5)], 1, sum), -->
+<!--                       apply(sims[,c(1,2,3)], 1, sum), -->
+<!--                       apply(sims[,c(1,3,4)], 1, sum)) -->
+
+<!-- # function for a decisive tie within a window defined by tol -->
+<!-- pr_in_window_condorcet_kemeny <- function(tol, sims){ -->
+<!--   mean(# forward cycle -->
+<!--     sims[,1] > 1/2 & # a beats b  -->
+<!--       sims[,3] > 1/2 & # b beats c -->
+<!--       sims[,2] < 1/2 & # # c beats a  -->
+<!--     sims[,2] > 1 - sims[,3] & # a's score against c better than c's score against b -->
+<!--       1 - sims[,1] > 1 - sims[,3] & # b's score against a better than c's score against b -->
+<!--       abs(sims[,2] - (1 - sims[,1])) < tol/2) -->
+<!-- } -->
+
+<!-- # apply that function across several values of tol -->
+<!-- data.frame(tol = seq(.001, .03, by = .0025)) %>%  -->
+<!--   mutate(piw = as.numeric(pmap(., pr_in_window_condorcet_kemeny, sims = pairwise_mat))) -> df  -->
+<!-- ``` -->
+
+<!-- ```{r a_regression} -->
+<!-- reg <- lm(log(piw) ~ log(tol), data = df) -->
+<!-- broom::tidy(reg) %>% kable() %>% kable_styling(full_width = F) -->
+<!-- ``` -->
+
+<!-- ```{r plot_condorcet_fix_kem} -->
+<!-- # plot the result along with a line of slope 1 and a line of slope sqrt(3) -->
+<!-- df %>% ggplot(aes(x = tol, y = piw)) +  -->
+<!--   geom_point() +  -->
+<!--   geom_abline(slope = 1, intercept = 0, linetype = 2) +  -->
+<!--   geom_abline(slope = 1/5, intercept = 0, linetype = 2, col = "green") +  -->
+<!--   geom_abline(slope = 1/6, intercept = 0, linetype = 2, col = "yellow") + -->
+<!--   geom_abline(slope = 1/7, intercept = 0, linetype = 2, col = "orange")  -->
+<!-- ``` -->
+
+
 Same procedure as above: 
 
 ```{r dmc_condorcet_1s, cache = T}
+# chang
+set.seed(12345)
 alpha_condorcet <- rep(1, 6)
-condorcet_sims <- gtools::rdirichlet(1000000, alpha_condorcet)
+condorcet_sims <- gtools::rdirichlet(3000000, alpha_condorcet)
 condorcet_dmc <- condorcet_pivot_probs_from_sims(condorcet_sims)
 ```
 
@@ -676,13 +968,10 @@ kemeny_reverse_out <- ordinal_shuffle_dirichlet_pivot_probs(alpha_condorcet, kem
 Did we hit the `maxEvals` ceiling? No:
 
 ```{r check_maxevals_kem}
-kemeny_forward_out$ab$message
-kemeny_forward_out$ac$message
-kemeny_forward_out$bc$message
-kemeny_reverse_out$ab$message
-kemeny_reverse_out$ac$message
-kemeny_reverse_out$bc$message
+c(kemeny_forward_out$ab$message, kemeny_forward_out$ac$message, kemeny_forward_out$bc$message, kemeny_reverse_out$ab$message, kemeny_reverse_out$ac$message, kemeny_reverse_out$bc$message)
 ```
+
+Note that the `ordinal_shuffle` doesn't work quite the same way here, as the forward and reverse cycles are switched for candidate pair `ac`. I will switch it in the output below, but `general_numerical_methods.R` has a function `kemeny_pivot_probs_sc_based()` that does the computations and handles the swap.  
 
 #### Comparison 
 
@@ -692,8 +981,8 @@ tibble(`Candidate pair` = c("ab_forward", "ab_reverse", "ac_forward", "ac_revers
        `Monte Carlo` = c(condorcet_dmc$ab_forward, condorcet_dmc$ab_reverse, condorcet_dmc$ac_forward, condorcet_dmc$ac_reverse, condorcet_dmc$bc_forward, condorcet_dmc$bc_reverse),
        `SimpCub integration` = c(kemeny_forward_out$ab$integral,
                                  kemeny_reverse_out$ab$integral,
-                                 kemeny_forward_out$ac$integral,
-                                 kemeny_reverse_out$ac$integral,
+                                 kemeny_reverse_out$ac$integral, # note swap
+                                 kemeny_forward_out$ac$integral, # note swap
                                  kemeny_forward_out$bc$integral,
                                  kemeny_reverse_out$bc$integral)) %>% 
   mutate(`Ratio` = `SimpCub integration`/`Monte Carlo`) %>% 
@@ -701,18 +990,21 @@ tibble(`Candidate pair` = c("ab_forward", "ab_reverse", "ac_forward", "ac_revers
   kable_styling(full_width = F)
 ```
 
+It could be that the normalizing factor is slightly different for the two sets of results, but it could also be just simulation variation.  
 
 ### Cyclical tie-breaking events: Kemeny with another distribution 
 
-Now we seek to compute pivot probabilities for a cycle-breaking procedure in which the winner is the one who loses by the least. For initial checking we'll set the  `alpha` parameter to `c(10, 4, 6, 7, 3, 12)`.
+Same thing, but now with other distributions to check how things are working. We'll set the  `alpha` parameter to `c(10, 4, 6, 7, 3, 12)`.
 
 #### Direct Monte Carlo 
 
 Same procedure as above: 
 
 ```{r dmc_condorcet_1s_x, cache = T}
+# chan
+set.seed(12345)
 alpha_condorcet <- c(10, 4, 6, 7, 3, 12)
-condorcet_sims <- gtools::rdirichlet(1000000, alpha_condorcet)
+condorcet_sims <- gtools::rdirichlet(3000000, alpha_condorcet)
 condorcet_dmc <- condorcet_pivot_probs_from_sims(condorcet_sims)
 ```
 
@@ -740,8 +1032,54 @@ tibble(`Candidate pair` = c("ab_forward", "ab_reverse", "ac_forward", "ac_revers
        `Monte Carlo` = c(condorcet_dmc$ab_forward, condorcet_dmc$ab_reverse, condorcet_dmc$ac_forward, condorcet_dmc$ac_reverse, condorcet_dmc$bc_forward, condorcet_dmc$bc_reverse),
        `SimpCub integration` = c(kemeny_forward_out$ab$integral,
                                  kemeny_reverse_out$ab$integral,
-                                 kemeny_forward_out$ac$integral,
-                                 kemeny_reverse_out$ac$integral,
+                                 kemeny_reverse_out$ac$integral, # note swap
+                                 kemeny_forward_out$ac$integral, # note swap
+                                 kemeny_forward_out$bc$integral,
+                                 kemeny_reverse_out$bc$integral)) %>% 
+  mutate(`Ratio` = `SimpCub integration`/`Monte Carlo`) %>% 
+  kable() %>% 
+  kable_styling(full_width = F)
+```
+
+The discrepancies here are a bit big (and consistent across different draws). The pattern of discrepancies suggests that the issue is with the simulations and not the numerical integration: `SimpCub` is too high for the forward cycles, but the `SimpCub` method is the same for `ab_forward`, `ac_reverse`, and `bc_forward`. 
+
+
+### Cyclical tie-breaking events: Kemeny with yet another distribution 
+
+Same thing, but now with other distributions to check how things are working. We'll set the  `alpha` parameter to `c(3, 9, 4, 10, 6, 6)`.
+
+#### Direct Monte Carlo 
+
+Same procedure as above: 
+
+```{r dmc_condorcet_1s_xy, cache = T}
+# change
+alpha_condorcet <- c(3, 9, 4, 10, 6, 6)
+condorcet_sims <- gtools::rdirichlet(1000000, alpha_condorcet)
+condorcet_dmc <- condorcet_pivot_probs_from_sims(condorcet_sims)
+```
+
+
+#### `SimplicialCubature` with generated `S` array 
+
+We do the computations using the `S` array generated above:
+
+```{r kemeny_compute_xy, cache = T}
+kemeny_forward_out <- ordinal_shuffle_dirichlet_pivot_probs(alpha_condorcet, kemeny_forward_S, tol = .1, maxEvals = maxEvals)
+kemeny_reverse_out <- ordinal_shuffle_dirichlet_pivot_probs(alpha_condorcet, kemeny_reverse_S, tol = .1, maxEvals = maxEvals)
+```
+
+
+#### Comparison 
+
+
+```{r kemeny_comparison_xxy}
+tibble(`Candidate pair` = c("ab_forward", "ab_reverse", "ac_forward", "ac_reverse", "bc_forward", "bc_reverse"), 
+       `Monte Carlo` = c(condorcet_dmc$ab_forward, condorcet_dmc$ab_reverse, condorcet_dmc$ac_forward, condorcet_dmc$ac_reverse, condorcet_dmc$bc_forward, condorcet_dmc$bc_reverse),
+       `SimpCub integration` = c(kemeny_forward_out$ab$integral,
+                                 kemeny_reverse_out$ab$integral,
+                                 kemeny_reverse_out$ac$integral, # note swap
+                                 kemeny_forward_out$ac$integral, # note swap
                                  kemeny_forward_out$bc$integral,
                                  kemeny_reverse_out$bc$integral)) %>% 
   mutate(`Ratio` = `SimpCub integration`/`Monte Carlo`) %>% 
@@ -750,7 +1088,12 @@ tibble(`Candidate pair` = c("ab_forward", "ab_reverse", "ac_forward", "ac_revers
 ```
 
 
-So things are not working correctly still. Let's investigate. 
+## Next steps 
+
+- wondering if there is a general approach for pivot probabilities; and why did this work for Borda Count? (Did it?)
+- is Condorcet correct? looks like still some systematic deviations. 
+
+
 
 ### Diagnosing the issue 
 
@@ -779,6 +1122,42 @@ That indeed is one vertex where the constraint does not bind: in the forward ver
 
 I looked through the process of producing this and it seems alright to me. So perhaps next I should check whether the simulation process has an error. It would be a symmetric error if so. 
 
+Let's look at some extreme cases and see which approach gives more sensible answers. 
+
+Here is a case where we expect a forward cycle. 
+```{r fc_alpha}
+alpha_condorcet <- c(10, 3, 2, 7, 10, 2)
+```
+It should yield high forward cycle pivot probabilities.
+
+We compute via simulation:
+```{r dmc_condorcet_1s_xx, cache = T}
+# ch
+condorcet_sims <- gtools::rdirichlet(1000000, alpha_condorcet)
+condorcet_dmc <- condorcet_pivot_probs_from_sims(condorcet_sims)
+```
+
+We compute via `SC`: 
+
+```{r kemeny_compute_xx, cache = T}
+kemeny_forward_out <- ordinal_shuffle_dirichlet_pivot_probs(alpha_condorcet, kemeny_forward_S, tol = .1, maxEvals = maxEvals)
+kemeny_reverse_out <- ordinal_shuffle_dirichlet_pivot_probs(alpha_condorcet, kemeny_reverse_S, tol = .1, maxEvals = maxEvals)
+```
+
+We compare:
+```{r kemeny_comparison_xxx}
+tibble(`Candidate pair` = c("ab_forward", "ab_reverse", "ac_forward", "ac_reverse", "bc_forward", "bc_reverse"), 
+       `Monte Carlo` = c(condorcet_dmc$ab_forward, condorcet_dmc$ab_reverse, condorcet_dmc$ac_forward, condorcet_dmc$ac_reverse, condorcet_dmc$bc_forward, condorcet_dmc$bc_reverse),
+       `SimpCub integration` = c(kemeny_forward_out$ab$integral,
+                                 kemeny_reverse_out$ab$integral,
+                                 kemeny_reverse_out$ac$integral, # note swwap
+                                 kemeny_forward_out$ac$integral, # note swwap
+                                 kemeny_forward_out$bc$integral,
+                                 kemeny_reverse_out$bc$integral)) %>% 
+  mutate(`Ratio` = `SimpCub integration`/`Monte Carlo`) %>% 
+  kable() %>% 
+  kable_styling(full_width = F)
+```
 
 
 <!-- ```{r kemeny_condorcet_S, cache = T} -->

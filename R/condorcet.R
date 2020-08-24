@@ -11,11 +11,11 @@ condorcet_pivot_probs_from_sims <- function(sims, tol = .01, cand_names = NULL, 
     stop("sims must have 6 columns.")
   }
 
-  a_vs_b <- apply(sims[,c(1,2,5)], 1, sum)
-  a_vs_c <- apply(sims[,c(1,2,3)], 1, sum)
-  b_vs_c <- apply(sims[,c(1,3,4)], 1, sum)
+  a_vs_b <- apply(sims[,c(1,2,5)], 1, sum) # the shae a got against b
+  a_vs_c <- apply(sims[,c(1,2,3)], 1, sum) # the shae a got against c
+  b_vs_c <- apply(sims[,c(1,3,4)], 1, sum) # the shae b got against c
 
-  normalizer <- tol/(sqrt(6)/2) # a little unsure about this.
+  normalizer <- tol/1 # (sqrt(6)/2) # a little unsure about this.
 
   out <- list(
     mean(a_vs_c > 1/2 & b_vs_c > 1/2 & abs(a_vs_b - 1/2) < tol/2)/normalizer,
@@ -75,21 +75,21 @@ condorcet_pivot_probs_from_sims <- function(sims, tol = .01, cand_names = NULL, 
       # forward cycle, and
         forward_cycle &
           # a's loss to c worse than b's loss to a
-          a_vs_b > b_vs_c &
+          a_vs_c < (1 - a_vs_b) &
           # b's loss to a worse than c's loss to b
-          b_vs_c > (1 - a_vs_c) &
+          (1 - a_vs_b) < (1 - b_vs_c) &
           # but just barely
-          b_vs_c - (1 - a_vs_c) < tol)/normalizer
+          (1 - b_vs_c) - (1 - a_vs_b) < tol)/normalizer
 
     out[[paste0(out_names[3], "_reverse")]] <- mean(
         # OR reverse cycle
           reverse_cycle &
             # a's loss to b worse than c's loss to a
-            (1 - a_vs_b) > a_vs_c &
+            a_vs_b < (1 - a_vs_c) &
             # c's loss to a worse than b's loss to c
-            a_vs_c > (1 - b_vs_c) &
+            (1 - a_vs_c) < b_vs_c &
             # but just barely
-            a_vs_c - (1 - b_vs_c) < tol)/normalizer
+            b_vs_c - (1 - a_vs_c) < tol)/normalizer
 
   }
 

@@ -1,0 +1,32 @@
+---
+title: "Weirdness in the Dirichlet density"
+author: "Andy Eggers"
+date: "24 August 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Weirdness in the Dirichlet density 
+
+I'm getting an error when `adsimp()` tries to integrate a Dirichlet function and one of the `alpha` components is below 1. 
+
+This behavior of `gtools::ddirichlet()` provides some clues why this might be happening: 
+
+```{r check_it_out}
+gtools::ddirichlet(c(1, 0, 0), alpha = c(5,5,5))
+gtools::ddirichlet(c(1, 0, 0), alpha = c(5,1,1))
+eps <- .0001
+gtools::ddirichlet(c(1, 0, 0), alpha = c(5,1,1 - eps))
+gtools::ddirichlet(c(1, 0, 0), alpha = c(5,1 - eps,1 - eps))
+gtools::ddirichlet(c(1 - eps, eps/2, eps/2), alpha = c(5,1 - eps,1 - eps))
+```
+
+So: it's only causing a problem at the extreme edge. I'm not sure how `adsimp()` works but it can't hurt much if we return a 0 instead of what we should have right at the edge. 
+
+So what can we do? One fix is to alter the Dirichlet density function we pass to `SimplicialCubature` so that it outputs 0 instead of `NaN` or `Inf`. I have done that and now at least the code runs. 
+
+Good problem solving. 
+
