@@ -1,4 +1,4 @@
-
+#' Compute pivot probabilities from a matrix of simulated election results
 
 ab_plurality_tie_for_first_from_sims <- function(sims, tol = .01){
   row_max <- apply(sims, 1, max)

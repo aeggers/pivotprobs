@@ -1,8 +1,39 @@
+#' Compute pivot probabilities for a plurality election
 #'
+#' @param method One of
+#' \itemize{
+#' \item \code{"eggers-vivyan"}, which is based on the Dirichlet
+#' distribution but makes an independence assumption for efficiency -- in brief, it assumes that the probability of $a$ and $b$ tying for first at vote share $x$ is equal to the probability of $a$ and $b$ receiving $x$ times the probability of $c$ receiving no more than $x$ times the probability of $d$ receiving no more than $x$ times the probability of $e$ receiving no more than $x$, etc. (In reality, these events are not independent.)
+#' \item \code{"myatt-fisher"}, which computes exact (but not normalized) pivot probabilities for the three-candidate case assuming a Dirichlet distribution over election outcomes.
+#' \item \code{"simplicial-cubature"}, which uses an adaptive algorithm to integrate the distribution of election results (either Dirichlet or multivariate normal) over the relevant simplices in $\mathbb{R}^k$.
+#' \item \code{"simulation"}, which takes a matrix of simulated election results, or arguments to generate such a matrix from a Dirichlet or multivariate normal distribution, and computes pivot probabilities.
+#' \item \code{"grid-based"}, which constructs a grid of points and computes pivot probabilities using either Dirichlet or multivariate normal parameters.
+#' }
+#' @param ... Other arguments including
+#' \itemize{
+#' \item \code{alpha}, a$k$-length vector of parameters for the Dirichlet
+#'  distribution,
+#'  \item \code{mu}, a $k$-length vector of expected vote shares for the Dirichlet distribution or multivariate normal distribution,
+#'  \item \code{sigma}, a $k$-by-$k$ matrix of variances and covariances for the multivariate normal distribution,
+#'  \item \code{sims} to be used if \code{method = "simulation"},
+#'  \item \code{n} the number of simulations, if \code{method = "simulation"} and not passing \code{sims},
+#'  \item \code{increment}, the space between grid-points if using \code{method = "grid-based"}
+#'  }
+#'
+#'
+#' @export
 #' @export
 plurality_pivot_probs <- function(method = "eggers-vivyan", ...){
 
   args <- list(...)
+
+  if(is.null(args$distribution)){
+    if(!is.null(args$alpha)){
+      args$distribution <- "dirichlet"
+    }else if(!is.null(args$sigma)){
+      args$distribution <- "mvnorm"
+    }
+  }
 
   if(method == "eggers-vivyan"){
 
@@ -48,7 +79,7 @@ plurality_pivot_probs <- function(method = "eggers-vivyan", ...){
 
     myatt_fisher_plurality_pivot_probs(args$alpha, cand_names = args$cand_names, sep = args$sep)
 
-  }else if(method == "simplicial-cubatature"){
+  }else if(method == "simplicial-cubature"){
 
     # Pivot probability calculation via numerical integration of the relevant facets.
     # Must pass a function name and parameters
@@ -74,15 +105,22 @@ plurality_pivot_probs <- function(method = "eggers-vivyan", ...){
         }
       }
 
-      simplicial_cubature_plurality_pivot_probs_dirichlet(alpha = args$alpha, ...)
+      # take out arguments that don't apply here
+      args$distribution = NULL
+      sc_out <- exec("simplicial_cubature_plurality_pivot_probs_dirichlet", !!!args)
+     #  sc_out <- simplicial_cubature_plurality_pivot_probs_dirichlet(alpha = args$alpha, ...)
 
     }else if(args$distribution == "mvnorm"){
       if(is.null(args$mu) | is.null(args$sigma)){
         stop("For `method` 'simplicial-cubature' and `integrand_function` 'mvnorm', you must pass `mu` and `sigma`.")
       }
 
-      simplicial_cubature_plurality_pivot_probs_mvnorm(mu = args$mu, sigma = args$sigma, ...)
+      args$distribution = NULL
+      sc_out <- exec("simplicial_cubature_plurality_pivot_probs_mvnorm", !!!args)
+#       sc_out <- simplicial_cubature_plurality_pivot_probs_mvnorm(mu = args$mu, sigma = args$sigma, ...)
     }
+
+    sc_out
 
   }else if(method == "simulation"){
     # you can pass the matrix of simulations, or
@@ -110,20 +148,23 @@ plurality_pivot_probs <- function(method = "eggers-vivyan", ...){
             stop("For `method` 'simulation' and `distribution` 'dirichlet', all elements of `alpha` must be positive.")
           }
         }
-        args$sims <- gtools::rdirichlet(n, args$alpha)
+        args$sims <- gtools::rdirichlet(args$n, args$alpha)
       }else if(args$distribution == "mvnorm"){
         if(is.null(args$mu) | is.null(args$sigma)){
           stop("For `method` 'simulation' and `distribution` 'mvnorm', you must pass `mu` and `sigma`.")
         }
-        args$sims <- mvtnorm::mvnorm(n, args$mu, args$sigma)
+        args$sims <- mvtnorm::mvnorm(args$n, args$mu, args$sigma)
       }
 
-      plurality_tie_probs_from_sims(args$sims, ...) # tol, cand_names, sep
-
     }
+
+    plurality_tie_probs_from_sims(args$sims, tol = args$tol, cand_names = args$cand_names, sep = args$sep) # explicitly naming arguments here.
+
   }else if(method == "grid-based"){
     # I put the error reporting in the method in this case.
-    grid_based_plurality_pivot_probs(distribution = args$distribution, increment = args$increment, ...)
+    exec("grid_based_plurality_pivot_probs", !!!args) # (distribution = args$distribution, increment = args$increment, ...)
+  }else{
+    stop("Unknown method ", args$method, ".\n")
   }
 
 }

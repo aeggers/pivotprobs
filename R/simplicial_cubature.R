@@ -123,7 +123,7 @@ simplicial_cubature_plurality_pivot_probs_dirichlet <- function(alpha, cand_name
   for(i in 1:(k-1)){
     for(j in (i+1):k){
       these_indices <- c(i,j,all_indices[-c(i,j)])
-      out[[paste0(cand_names[i], sep, cand_names[j])]] = SimplicialCubature::adaptIntegrateSimplex(f = dir_fn, S = S, alpha = alpha[these_indices], ...)
+      out[[paste0(cand_names[i], sep, cand_names[j])]] = SimplicialCubature::adaptIntegrateSimplex(f = dirichlet_for_integration, S = S, alpha = alpha[these_indices], ...)
     }
   }
   out
@@ -131,7 +131,7 @@ simplicial_cubature_plurality_pivot_probs_dirichlet <- function(alpha, cand_name
 }
 
 
-simplicial_cubature_plurality_pivot_probs_mvnorm <- function(alpha, cand_names = NULL, sep = "", ...){
+simplicial_cubature_plurality_pivot_probs_mvnorm <- function(mu, sigma, cand_names = NULL, sep = "", ...){
 
   out <- list()
   k <- length(mu)
@@ -154,17 +154,11 @@ simplicial_cubature_plurality_pivot_probs_mvnorm <- function(alpha, cand_names =
 ## integrand functions
 
 dirichlet_for_integration <- function(x, alpha){
-  if(is.null(indices)){
-    indices <- 1:length(alpha)
-  }
   out <- gtools::ddirichlet(as.vector(x), alpha)/sqrt(length(alpha)) # correction for dimensionality
   ifelse(is.nan(out) | is.infinite(out), 0, out)
 }
 
 mvnorm_for_integration <- function(x, mu, sigma, normalizing_factor = 1){
-  if(is.null(indices)){
-    indices <- 1:length(mu)
-  }
   mvtnorm::dmvnorm(c(as.numeric(x), 1 - sum(x)), mean = mu, sigma = sigma)/normalizing_factor
 }
 

@@ -26,7 +26,7 @@ one_pivot_prob_from_tie_grid_and_alpha_unnormalized <- function(tie_grid, alpha)
 
 TIE_GRID_STORE <- list()
 
-grid_based_plurality_pivot_probs <- function(distribution = "dirichlet", increment = .025, cand_names = NULL, sep = "", ...){
+grid_based_plurality_pivot_probs <- function(distribution = "dirichlet", ...){
 
   args <- list(...)
 
@@ -56,26 +56,28 @@ grid_based_plurality_pivot_probs <- function(distribution = "dirichlet", increme
     k <- length(args$mu)
   }
 
-  if(is.null(cand_names)){cand_names <- letters[1:k]}
+  if(is.null(args$cand_names)){args$cand_names <- letters[1:k]}
+  if(is.null(args$sep)){args$sep = ""}
+  if(is.null(args$increment)){args$increment = .025}
 
-  this_ptg_name <- paste0("k_", k, "_increment_", increment)
+  this_ptg_name <- paste0("k_", k, "_increment_", args$increment)
   if(this_ptg_name %in% names(TIE_GRID_STORE)){
     ptg <- TIE_GRID_STORE[[this_ptg_name]]
   }else{
-    TIE_GRID_STORE[[this_ptg_name]] <<- ptg <- plurality_tie_grid(increment, k)
+    TIE_GRID_STORE[[this_ptg_name]] <<- ptg <- plurality_tie_grid(increment = args$increment, k = k)
   }
 
-  effective_increment <- 1/round(1/increment, 0)
+  effective_increment <- 1/round(1/args$increment, 0)
   out <- list()
-  for(i in 1:(length(cand_names)-1)){
-    for(j in (i+1):length(cand_names)){
-      pp_name <- paste0(cand_names[i], sep, cand_names[j])
+  for(i in 1:(length(args$cand_names)-1)){
+    for(j in (i+1):length(args$cand_names)){
+      pp_name <- paste0(args$cand_names[i], args$sep, args$cand_names[j])
       indices <- c(i,j,(1:k)[-c(i,j)])
       normalizer <- effective_increment^(k-2)
       if(distribution == "dirichlet"){
-        out[[pp_name]] <- sum(gtools::ddirichlet(as.matrix(tie_grid), alpha = args$alpha[indices]))*normalizer
+        out[[pp_name]] <- sum(gtools::ddirichlet(as.matrix(ptg), alpha = args$alpha[indices]))*normalizer
       }else if(distribution == "mvrnorm"){
-        out[[pp_name]] <- sum(mvtnorm::mvnorm(as.matrix(tie_grid), mu = args$mu[indices], sigma = args$sigma[indices, indices]))*normalizer
+        out[[pp_name]] <- sum(mvtnorm::mvnorm(as.matrix(ptg), mu = args$mu[indices], sigma = args$sigma[indices, indices]))*normalizer
       }
     }
   }

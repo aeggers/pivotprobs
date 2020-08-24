@@ -9,3 +9,4 @@ vignettes/*.pdf
 .Renviron
 .DS_Store
 *_files/
+notes/*.html

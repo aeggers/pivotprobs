@@ -11,6 +11,64 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## Objective 
 
-Here we will test the `plurality_pivot_probs()` function.  Still need to put in the grid-based approach, try the multivariate normal thing, and resolve any remaining issues. 
+Here we will test the `plurality_pivot_probs()` function.  We can show the usage for some cases and then do a time-consuming comparison test. 
+
+```{r load_all}
+devtools::load_all(".")
+library(tidyverse)
+```
+
+To compare across the most methods, let's do some three-candidate cases.
+
+```{r case_3, cache = T}
+# chan
+alpha <- c(10, 7, 4)
+sims <- gtools::rdirichlet(n = 5000000, alpha = alpha)
+
+out <- 
+  list(ev = plurality_pivot_probs(method = "eggers-vivyan", alpha = alpha),
+      mf = plurality_pivot_probs(method = "myatt-fisher", alpha = alpha),
+      sc = plurality_pivot_probs(method = "simplicial-cubature", alpha = alpha),
+      sim = plurality_pivot_probs(method = "simulation", alpha = alpha, n = 100000), # not specifying distribution
+       sim2 = plurality_pivot_probs(method = "simulation", sims = sims),
+# ,
+       gb = plurality_pivot_probs(method = "grid-based", alpha = alpha, increment = .026))
+
+out
+```
+
+And then a quick plot before we end for the day: 
+
+```{r quick_plot}
+bind_rows(
+  tibble(type = "ev", pp = names(out$ev), value = unlist(out$ev)),
+  tibble(type = "mf", pp = names(out$mf), value = unlist(out$mf)*(out$sim2$ab/out$mf$ab)),
+  tibble(type = "sc", pp = names(out$sc), value = as.numeric(map(out$sc, "integral"))),
+  tibble(type = "sim", pp = names(out$sim), value = unlist(out$sim)),
+  tibble(type = "gb", pp = names(out$gb), value = unlist(out$gb))
+) %>% 
+  left_join(tibble(pp = names(out$sim2), sim_value = unlist(out$sim2)), by = "pp") -> for_plot 
+
+for_plot %>% ggplot(aes(x = sim_value, y = value, col = type)) + 
+  geom_point() + 
+  scale_x_log10() + 
+  scale_y_log10()
+```
+
+In the code for `plurality_pivot_probs()` there is still some awkwardness: 
+
+- error checking in that function vs in the underlying function
+- handling arguments by passing explicitly vs using `exec()` and `!!!args`
+
+Other things still to do: 
+
+- for methods other than Myatt-Fisher, we need to do some work on the normalization
+- we need to document performance -- speed, RMSE relative to simulation (once we have the normalization worked out) 
+- we need to write a paper: make a figure, write down some math, etc. 
+- obviously positional methods, Condorcet, PR are still out there too 
+
+But the good news is that we're not THAT far from having something on plurality we can put on github to use in other projects, e.g. for the `eggers-vivyan` stuff. 
+
+
 
 

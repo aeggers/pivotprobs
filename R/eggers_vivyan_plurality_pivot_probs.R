@@ -31,7 +31,7 @@ probability.of.tie.for.first <- function(alpha, increments = 50){
        ys = ys, tie.vec = tie.vec, prob.mat = prob.mat) # I include these for diagnostic purposes
 }
 
-## and here's the main function, which yields pivotal probabilities in a vector, given an alpha input.
+
 eggers_vivyan_plurality_pivot_probs <- function(alpha, increments = 50, cand_names = NULL, sep = ""){
   if(is.null(cand_names)){cand_names <- letters[1:3]}
   out <- list()
