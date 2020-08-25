@@ -111,7 +111,7 @@ plurality_simplices_to_integrate <- function(k){
 }
 
 
-simplicial_cubature_plurality_pivot_probs_dirichlet <- function(alpha, cand_names = NULL, sep = "", ...){
+simplicial_cubature_plurality_pivot_probs_dirichlet <- function(alpha, cand_names = NULL, sep = "", full_output = F, ...){
 
   out <- list()
   k <- length(alpha)
@@ -126,12 +126,16 @@ simplicial_cubature_plurality_pivot_probs_dirichlet <- function(alpha, cand_name
       out[[paste0(cand_names[i], sep, cand_names[j])]] = SimplicialCubature::adaptIntegrateSimplex(f = dirichlet_for_integration, S = S, alpha = alpha[these_indices], ...)
     }
   }
-  out
+
+  if(full_output){
+    out
+  }else{
+    out %>% map("integral")
+  }
 
 }
 
-
-simplicial_cubature_plurality_pivot_probs_mvnorm <- function(mu, sigma, cand_names = NULL, sep = "", ...){
+simplicial_cubature_plurality_pivot_probs_mvnorm <- function(mu, sigma, cand_names = NULL, sep = "", full_output = F, report_issues = T, normalizing_factor = 1, ...){
 
   out <- list()
   k <- length(mu)
@@ -143,10 +147,24 @@ simplicial_cubature_plurality_pivot_probs_mvnorm <- function(mu, sigma, cand_nam
   for(i in 1:(k-1)){
     for(j in (i+1):k){
       these_indices <- c(i,j,all_indices[-c(i,j)])
-      out[[paste0(cand_names[i], sep, cand_names[j])]] = SimplicialCubature::adaptIntegrateSimplex(f = mvnorm_for_integration, S = S, mu = mu[these_indices], sigma = sigma[these_indices, these_indices], ...)
+      the_name <- paste0(cand_names[i], sep, cand_names[j])
+      out[[the_name]] = SimplicialCubature::adaptIntegrateSimplex(f = mvnorm_for_integration, S = S, mu = mu[these_indices], sigma = sigma[these_indices, these_indices], ...)
+      out[[the_name]]$integral <- out[[the_name]]$integral/normalizing_factor
     }
   }
-  out
+
+  if(report_issues){
+    msgs <- out %>% map("message")
+    if(length(unique(msgs)) != 1){
+      cat("Messages from SimplicialCubature::adaptIntegrateSimplex: \n", paste(msg, collapse = "\n"))
+    }
+  }
+
+  if(full_output){
+    out
+  }else{
+    out %>% map("integral")
+  }
 
 }
 
@@ -158,9 +176,21 @@ dirichlet_for_integration <- function(x, alpha){
   ifelse(is.nan(out) | is.infinite(out), 0, out)
 }
 
-mvnorm_for_integration <- function(x, mu, sigma, normalizing_factor = 1){
-  mvtnorm::dmvnorm(c(as.numeric(x), 1 - sum(x)), mean = mu, sigma = sigma)/normalizing_factor
+# #to see need for this correction:
+# naive_dirichlet_fn <- function(x, alpha){
+#   gtools::ddirichlet(as.vector(x), alpha)
+# }
+
+# SimplicialCubature::adaptIntegrateSimplex(naive_dirichlet_fn, S = diag(3), alpha = c(5,4,3))  # returns sqrt(3)
+# SimplicialCubature::adaptIntegrateSimplex(dirichlet_for_integration, S = diag(3), alpha = c(5,4,3)) returns 1
+
+# SimplicialCubature::adaptIntegrateSimplex(naive_dirichlet_fn, S = diag(5), alpha = c(5,4,3, 2, 2), tol = .1, maxEvals = 100000)  # returns sqrt(5)
+# SimplicialCubature::adaptIntegrateSimplex(dirichlet_for_integration, S = diag(5), alpha = c(5,4,3, 2,2), tol = .1, maxEvals = 100000) returns 1
+
+
+mvnorm_for_integration <- function(x, mu, sigma){
+  mvtnorm::dmvnorm(as.numeric(x), mean = mu, sigma = sigma)
 }
 
-
+# SimplicialCubature::adaptIntegrateSimplex(mvnorm_for_integration, S = diag(3), mu = c(.4, .35, .25), sigma = diag(3)*.02)
 

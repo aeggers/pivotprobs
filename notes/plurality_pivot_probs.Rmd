@@ -13,47 +13,249 @@ knitr::opts_chunk$set(echo = TRUE)
 
 Here we will test the `plurality_pivot_probs()` function.  We can show the usage for some cases and then do a time-consuming comparison test. 
 
-```{r load_all}
+```{r load_all, message = F}
 devtools::load_all(".")
 library(tidyverse)
 ```
 
-To compare across the most methods, let's do some three-candidate cases.
+### A single case, Dirichlet beliefs
+
+#### Computing pivot probabilities 
+
+Here we show how to get the pivot probability for a single case by different methods. 
 
 ```{r case_3, cache = T}
-# chan
+# ch
 alpha <- c(10, 7, 4)
-sims <- gtools::rdirichlet(n = 5000000, alpha = alpha)
+sims <- gtools::rdirichlet(n = 1000000, alpha = alpha)
 
-out <- 
-  list(ev = plurality_pivot_probs(method = "eggers-vivyan", alpha = alpha),
-      mf = plurality_pivot_probs(method = "myatt-fisher", alpha = alpha),
-      sc = plurality_pivot_probs(method = "simplicial-cubature", alpha = alpha),
-      sim = plurality_pivot_probs(method = "simulation", alpha = alpha, n = 100000), # not specifying distribution
-       sim2 = plurality_pivot_probs(method = "simulation", sims = sims),
-# ,
-       gb = plurality_pivot_probs(method = "grid-based", alpha = alpha, increment = .026))
+ev <- plurality_pivot_probs(method = "eggers-vivyan", alpha = alpha)
+mf <- plurality_pivot_probs(method = "myatt-fisher", alpha = alpha)
+sc <- plurality_pivot_probs(method = "simplicial-cubature", alpha = alpha)
+sim1 <- plurality_pivot_probs(method = "simulation", alpha = alpha, n = 100000) 
+sim2 <- plurality_pivot_probs(method = "simulation", sims = sims)
+gb <- plurality_pivot_probs(method = "grid-based", alpha = alpha, increment = .026)
 
-out
 ```
 
-And then a quick plot before we end for the day: 
+#### Comparing relative pivot probabilities across methods 
 
-```{r quick_plot}
+```{r relative_plot}
+pps <- names(ev)
 bind_rows(
-  tibble(type = "ev", pp = names(out$ev), value = unlist(out$ev)),
-  tibble(type = "mf", pp = names(out$mf), value = unlist(out$mf)*(out$sim2$ab/out$mf$ab)),
-  tibble(type = "sc", pp = names(out$sc), value = as.numeric(map(out$sc, "integral"))),
-  tibble(type = "sim", pp = names(out$sim), value = unlist(out$sim)),
-  tibble(type = "gb", pp = names(out$gb), value = unlist(out$gb))
-) %>% 
-  left_join(tibble(pp = names(out$sim2), sim_value = unlist(out$sim2)), by = "pp") -> for_plot 
+  tibble(type = "ev", pp = pps, value = unlist(ev)),
+  tibble(type = "mf", pp = pps, value = unlist(mf)),
+  tibble(type = "sc", pp = pps, value = unlist(sc)),
+  tibble(type = "sim1", pp = pps, value = unlist(sim1)),
+  tibble(type = "sim2", pp = pps, value = unlist(sim2)),
+  tibble(type = "gb", pp = pps, value = unlist(gb))
+) -> df 
 
-for_plot %>% ggplot(aes(x = sim_value, y = value, col = type)) + 
-  geom_point() + 
-  scale_x_log10() + 
-  scale_y_log10()
+df %>% 
+  pivot_wider(names_from = pp, values_from = value) %>% 
+  mutate(ab_ac = ab/ac, ab_bc = ab/bc) %>% 
+  ggplot(aes(x = ab_ac, y = ab_bc, col = type, shape = type)) + 
+  geom_point() +
+  labs(x = "Ratio of ab pivot prob to ac pivot prob", y = "Ratio of ab pivot prob to bc pivot prob")
+
 ```
+
+We see that they are close but not exactly the same. Grid-based and Myatt-Fisher are particularly far from the simulation results. Eggers-Vivyan and Simplicial Cubatare agree exactly; this makes sense because they are both doing numerical integration along a line. 
+
+#### Comparing absolute pivot probabilities across methods 
+
+Absolute pivot probabilities are important for comparing strategic voting incentives across different elections or voting methods. 
+
+First we show that the methods agree in this one case. (We exclude Myatt-Fisher because it is not attempting to give the right absolute level.) 
+
+```{r absolutes}
+target <- df %>% filter(type == "sim2")
+
+df %>% filter(! type %in% c("sim2", "mf")) %>% 
+  left_join(target, by = "pp", suffix = c("", "_sim1M")) %>% 
+  ggplot(aes(x = value_sim1M, y = value, col = type, shape = pp)) + 
+  geom_point(alpha = .85) +
+  scale_x_log10() + 
+  scale_y_log10() +
+  geom_abline(intercept = 0, slope = 1, lty = 2, alpha = .3) +
+  labs(x = "Estimated pivot probability by simulation (1M)", y = "Estimated pivot probability by other method", shape = "Pivot event", col = "Method")
+
+```
+
+And then we can show that these absolute levels are correct using a case where we know what the answer should be. With three candidates and a flat Dirichlet distribution where `alpha = c(1,1,1)`, the answer should be 
+\[
+\frac{1}{\sqrt{3}}f(\mathbf{x}; 1, 1, 1) \sqrt{2(1/2 - 1/3)^2 + (1/3)^2} = \frac{2}{3\sqrt{2}} \approx 0.4714045
+\]
+
+Just confirming that in `R`: 
+
+```{r target_for_calibration}
+point_1 <- c(.5, .5, 0)
+point_2 <- c(1/3, 1/3, 1/3)
+distance <- sqrt(sum((point_2 - point_1)^2))
+density <- gtools::ddirichlet(rep(1/3, 3), alpha = rep(1,3))/sqrt(3)
+target <- distance*density
+target
+```
+
+The numerical integration methods produce that exactly; simulation and grid-based come close:
+
+```{r target_practice, cache = T}
+alpha <- rep(1,3)
+ev <- plurality_pivot_probs(method = "eggers-vivyan", alpha = alpha)
+sc <- plurality_pivot_probs(method = "simplicial-cubature", alpha = alpha)
+sim <- plurality_pivot_probs(method = "simulation", alpha = alpha, n = 500000) 
+gb <- plurality_pivot_probs(method = "grid-based", alpha = alpha, increment = .026)
+tibble(`Method` = c("Eggers-Vivyan", "Simplicial Cubature", "Monte Carlo", "Grid-based"), `Estimate` = c(ev$ab, sc$ab, sim$ab, gb$ab)) %>%   mutate(`Percent error` = 100*(`Estimate` - target)/target) %>% 
+  knitr::kable(format = "html") %>% 
+  kableExtra::kable_styling(full_width = F)
+```
+
+
+#### Variation in syntax
+
+Here are some alterative ways we can specify the distribution.
+
+```{r case_3a, cache = T}
+# ch
+alpha <- c(10, 7, 4)
+v_vec <- alpha/sum(alpha)
+precision <- sum(alpha)
+
+ev <- plurality_pivot_probs(method = "eggers-vivyan", mu = v_vec, precision = precision)
+mf <- plurality_pivot_probs(method = "myatt-fisher", mu = v_vec, precision = precision)
+sc <- plurality_pivot_probs(method = "simplicial-cubature", mu = v_vec, precision = precision)
+gb <- plurality_pivot_probs(method = "grid-based", mu = v_vec, precision = precision, increment = .02)
+
+```
+
+
+### A single case, Normal beliefs
+
+For the `simplicial-cubature` and `grid-based` methods we can also compute the pivot probability with multivariate normal beliefs. We can compare these with simulation based results. 
+
+#### Computing pivot probabilities 
+
+Here we show how to get the pivot probability for a single case by different methods. 
+
+```{r case_3_mvnorm, cache = T}
+# chang
+mu <- c(.4, .35, .25) 
+sigma <- diag(3)*c(.04^2, .03^2, .02^2)
+
+
+sc <- plurality_pivot_probs(method = "simplicial-cubature", mu = mu, sigma = sigma)
+gb <- plurality_pivot_probs(method = "grid-based", mu = mu, sigma = sigma, increment = .005)
+
+sims <- mvtnorm::rmvnorm(n = 100000, mean = mu, sigma = sigma)
+sims <- sims[apply(sims, 1, min) > 0,]
+sims <- sims[apply(sims, 1, max) < 1, ] 
+
+sim_result <- plurality_pivot_probs(method = "simulation", sims = sims)
+
+```
+
+```{r look_it}
+sc 
+gb
+sim_result
+```
+
+So we get approximately the same answer for `ab` with all methods, but `simplicial-cubature` and `grid-based` differ from `simulation` for the `ac` and `bc` for the others. (They are similar to each other on these; the difference might be due to numerical integration issues.) This suggests that shuffling indices isn't correct. At first I thought the normalizing constant might differ across pivot probs, but on reflection that's not correct. Then I wondered if the `sigma` matrix gets garbled when we reshuffle the indices, but it seems correct: 
+
+```{r check_shuffle}
+expand_grid(x = "x", a = 1:3, b = 1:3) %>% mutate(d = paste0(x, a, b)) %>% pull(d) -> d
+m <- matrix(d, nrow = 3, ncol = 3, byrow = T)
+m
+m[c(1,3,2), c(1,3,2)]
+```
+
+Let's try a case where all three pivot probs should be the same: 
+
+```{r case_3_mvnorm_special_case, cache = T}
+# change
+mu_sc <- rep(1/3, 3) 
+sigma_sc <- diag(3)*c(.04^2)
+
+sc <- plurality_pivot_probs(method = "simplicial-cubature", mu = mu_sc, sigma = sigma_sc)
+gb <- plurality_pivot_probs(method = "grid-based", mu = mu_sc, sigma = sigma_sc, increment = .005)
+
+sims <- mvtnorm::rmvnorm(n = 100000, mean = mu_sc, sigma = sigma_sc)
+sims <- sims[apply(sims, 1, min) > 0,]
+sims <- sims[apply(sims, 1, max) < 1, ] 
+
+sim_result <- plurality_pivot_probs(method = "simulation", sims = sims)
+
+```
+
+```{r look_it_special_case}
+sc 
+gb
+sim_result
+```
+
+
+
+Let's do things explicitly. 
+
+```{r sc_explicit}
+S <- plurality_simplices_to_integrate(3)
+out <- SimplicialCubature::adaptIntegrateSimplex(f = mvnorm_for_integration, S = S, mu = mu, sigma = sigma)
+# out
+normalizer <- SimplicialCubature::adaptIntegrateSimplex(f = mvnorm_for_integration, S = diag(3), mu = mu, sigma = sigma)$integral
+
+out$integral/normalizer
+
+out_ac <- SimplicialCubature::adaptIntegrateSimplex(f = mvnorm_for_integration, S = S, mu = mu[c(1,3,2)], sigma = sigma[c(1,3,2),c(1,3,2)])
+out_ac$integral/normalizer
+
+out_ac2 <- SimplicialCubature::adaptIntegrateSimplex(f = mvnorm_for_integration, S = S[c(1,3,2),,], mu = mu, sigma = sigma)
+out_ac2$integral/normalizer
+
+```
+
+
+```{r relative_plot_mvnorm}
+pps <- names(sc)
+bind_rows(
+  tibble(type = "sc", pp = pps, value = unlist(sc)),
+  tibble(type = "gb", pp = pps, value = unlist(gb)),
+  tibble(type = "sim", pp = pps, value = unlist(sim_result))) -> df
+
+df %>%
+  pivot_wider(names_from = pp, values_from = value) %>%
+  mutate(ab_ac = ab/ac, ab_bc = ab/bc) %>%
+  ggplot(aes(x = ab_ac, y = ab_bc, col = type, shape = type)) +
+  geom_point() +
+  labs(x = "Ratio of ab pivot prob to ac pivot prob", y = "Ratio of ab pivot prob to bc pivot prob")
+
+```
+
+
+
+#### Comparing absolute pivot probabilities across methods 
+
+Absolute pivot probabilities are important for comparing strategic voting incentives across different elections or voting methods. 
+
+First we show that the methods agree in this one case. 
+
+
+<!-- ```{r absolutes_mvnorm} -->
+<!-- target <- df %>% filter(type == "sim") -->
+
+<!-- df %>% filter(! type %in% c("sim")) %>%  -->
+<!--   left_join(target, by = "pp", suffix = c("", "_sim1M")) %>%  -->
+<!--   ggplot(aes(x = value_sim1M, y = value, col = type, shape = pp)) +  -->
+<!--   geom_point(alpha = .85) + -->
+<!--   scale_x_log10() +  -->
+<!--   scale_y_log10() + -->
+<!--   geom_abline(intercept = 0, slope = 1, lty = 2, alpha = .3) + -->
+<!--   labs(x = "Estimated pivot probability by simulation (1M)", y = "Estimated pivot probability by other method", shape = "Pivot event", col = "Method") -->
+
+<!-- ``` -->
+
+
+## Next steps 
 
 In the code for `plurality_pivot_probs()` there is still some awkwardness: 
 

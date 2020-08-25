@@ -20,13 +20,13 @@ plurality_tie_grid <- function(increment = .025, k = 4){
 
 }
 
-one_pivot_prob_from_tie_grid_and_alpha_unnormalized <- function(tie_grid, alpha){
-  sum(gtools::ddirichlet(as.matrix(tie_grid), alpha))
-}
+#sum_of_grid_point_dirichlet_densities <- function(tie_grid, alpha){
+#  sum(gtools::ddirichlet(as.matrix(tie_grid), alpha)/sqrt(length(alpha)))
+#}
 
 TIE_GRID_STORE <- list()
 
-grid_based_plurality_pivot_probs <- function(distribution = "dirichlet", ...){
+grid_based_plurality_pivot_probs <- function(distribution = "dirichlet", normalizing_factor = 1, ...){
 
   args <- list(...)
 
@@ -67,28 +67,44 @@ grid_based_plurality_pivot_probs <- function(distribution = "dirichlet", ...){
     TIE_GRID_STORE[[this_ptg_name]] <<- ptg <- plurality_tie_grid(increment = args$increment, k = k)
   }
 
-  effective_increment <- 1/round(1/args$increment, 0)
+  grid_hypercube_volume <- plurality_grid_hypervolume_from_ptg(ptg)
+
   out <- list()
   for(i in 1:(length(args$cand_names)-1)){
     for(j in (i+1):length(args$cand_names)){
       pp_name <- paste0(args$cand_names[i], args$sep, args$cand_names[j])
       indices <- c(i,j,(1:k)[-c(i,j)])
-      normalizer <- effective_increment^(k-2)
       if(distribution == "dirichlet"){
-        out[[pp_name]] <- sum(gtools::ddirichlet(as.matrix(ptg), alpha = args$alpha[indices]))*normalizer
-      }else if(distribution == "mvrnorm"){
-        out[[pp_name]] <- sum(mvtnorm::mvnorm(as.matrix(ptg), mu = args$mu[indices], sigma = args$sigma[indices, indices]))*normalizer
+        out[[pp_name]] <- (1/normalizing_factor)*grid_hypercube_volume*sum(gtools::ddirichlet(as.matrix(ptg), alpha = args$alpha[indices]))/sqrt(length(alpha))
+      }else if(distribution == "mvnorm"){
+        out[[pp_name]] <- (1/normalizing_factor)*grid_hypercube_volume*sum(mvtnorm::dmvnorm(as.matrix(ptg), mean = args$mu[indices], sigma = args$sigma[indices, indices]))
+      }else{
+        stop("The `distribution` argument must be 'dirichlet' or 'mvnorm'.")
       }
     }
   }
   out
 }
 
+plurality_grid_hypervolume_from_ptg <- function(ptg){
+  # we get the product of the first k-2 unique distances -- could produce an error if a diagonal distance is less than an orthogonal distance
+  # k-2 because the hyperplane is in k-2 dimensions.
+  k <- ncol(ptg)
+  i <- floor(nrow(ptg)/2) # picking a point from the middle of the grid matrix
+  p <- as.numeric(ptg[i, ])
+  m <- as.matrix(ptg[-i,])
+  sdpmp <- unique(sort(distance_from_point_to_matrix_of_points(p, m)))
+  prod(sdpmp[1:(k-2)]) # the product of the first k-2 unique distances
+}
 
-# I thought I might need to normalize, but it appears I don't?
-# gr <- expand_grid(x = standard_seq, y = standard_seq) %>% filter(x + y < 1) %>% mutate(z = 1 - x - y)
-# sum(gtools::ddirichlet(as.matrix(gr), alpha = rep(1, 3)))*increment^2
-# I guess the point is that each of these points is actually a triangle? could I get the area of the volumes in the grid?
-# TODO: look into this, perhaps once I have some results
+distance_between_points <- function(p1, p2){
+  sqrt(sum((p1 - p2)^2))
+}
+
+distance_from_point_to_matrix_of_points <- function(p, m){
+  stopifnot(length(p) == ncol(m))
+  apply(m, 1, distance_between_points, p2 = p)
+
+}
 
 

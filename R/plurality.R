@@ -23,16 +23,30 @@
 #'
 #' @export
 #' @export
-plurality_pivot_probs <- function(method = "eggers-vivyan", ...){
+plurality_pivot_probs <- function(method = "eggers-vivyan", normalize = T, ...){
 
   args <- list(...)
 
-  if(is.null(args$distribution)){
-    if(!is.null(args$alpha)){
+  # guessing the distribution from the parameters passed
+  if(method != "simulation" & is.null(args$distribution)){
+    if((!is.null(args$alpha) | !is.null(args$precision)) & !is.null(args$sigma)){
+      stop("You did not pass a `distribution` argument and you passed both (`alpha` or `precision`) and `sigma` -- unable to determine which distribution you intended. Either state the distribution or pass unambiguous arguments.")
+    }
+    if(!is.null(args$alpha) | !is.null(args$precision)){
       args$distribution <- "dirichlet"
     }else if(!is.null(args$sigma)){
       args$distribution <- "mvnorm"
+    }else{
+      stop("You did not pass a `distribution` argument and you did not pass arguments that make clear what distribution you intended.")
     }
+  }
+
+  # we can get the normalizing factor for a multivariate normal via numerical integration
+  if(method != "simulation" && args$distribution == "mvnorm" && normalize == T){
+    normalizing_factor <- SimplicialCubature::adaptIntegrateSimplex(mvnorm_for_integration, S = diag(length(mu)), mu = args$mu, sigma = args$sigma)$integral
+    cat("The normalizing_factor is ", normalizing_factor, ".\n", sep = "")
+  }else{
+    normalizing_factor <- 1
   }
 
   if(method == "eggers-vivyan"){
@@ -84,9 +98,6 @@ plurality_pivot_probs <- function(method = "eggers-vivyan", ...){
     # Pivot probability calculation via numerical integration of the relevant facets.
     # Must pass a function name and parameters
 
-    if(is.null(args$distribution)){
-      stop("For method `simplicial-cubature` you must pass a `distribution` argument.")
-    }
     if(!args$distribution %in% c("dirichlet", "mvnorm")){
       stop("For method `simplicial-cubature`, the `distribution` argument must be `dirichlet` or `mvnorm`.")
     }
@@ -106,7 +117,9 @@ plurality_pivot_probs <- function(method = "eggers-vivyan", ...){
       }
 
       # take out arguments that don't apply here
-      args$distribution = NULL
+      args$distribution <- NULL
+      args$mu <- NULL
+      args$precision <- NULL
       sc_out <- exec("simplicial_cubature_plurality_pivot_probs_dirichlet", !!!args)
      #  sc_out <- simplicial_cubature_plurality_pivot_probs_dirichlet(alpha = args$alpha, ...)
 
@@ -116,8 +129,8 @@ plurality_pivot_probs <- function(method = "eggers-vivyan", ...){
       }
 
       args$distribution = NULL
-      sc_out <- exec("simplicial_cubature_plurality_pivot_probs_mvnorm", !!!args)
-#       sc_out <- simplicial_cubature_plurality_pivot_probs_mvnorm(mu = args$mu, sigma = args$sigma, ...)
+      args$normalizing_factor = normalizing_factor
+      sc_out <- exec("simplicial_cubature_plurality_pivot_probs_mvnorm", !!!args) # converts args into explicit arguments.
     }
 
     sc_out
@@ -162,6 +175,7 @@ plurality_pivot_probs <- function(method = "eggers-vivyan", ...){
 
   }else if(method == "grid-based"){
     # I put the error reporting in the method in this case.
+    args$normalizing_factor = normalizing_factor
     exec("grid_based_plurality_pivot_probs", !!!args) # (distribution = args$distribution, increment = args$increment, ...)
   }else{
     stop("Unknown method ", args$method, ".\n")
