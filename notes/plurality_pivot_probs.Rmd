@@ -1,13 +1,152 @@
 ---
 title: "Plurality pivot probability methods"
 author: "Andy Eggers"
-date: "24 August 2020"
+date: "26 August 2020"
 output: html_document
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
 ```
+
+## Plurality pivot events 
+
+In general, pivot events are classes of election outcomes where a single vote can change the election outcome. Computing the probability of pivot events is important for determining the optimal (strategic) vote, for computing how much a voter gains by voting strategically rather than sincerely, for assessing a voting system's susceptibility to strategic voting, and for other reasons. 
+
+In plurality elections, pivot events are ties or near-ties for first between two or more candidates. 
+
+## Estimand
+
+We seek to estimate the probability that a single vote could change the winner from one candidate to another for each pair of candidates in a plurality contest. 
+We model the outcome of a $K$-candidate plurality election as a vector of vote shares $\mathbf{v} = (v_1, v_2, \ldots, v_K)$ with $\sum_{i = 1}^K v_i = 1$. To avoid messy complication involving ties and tie-breaking, we assume a continuous distribution $f(\mathbf{v})$ over election outcomes; thus the probability of a tie is assumed to be zero, and every election is decisive. The distribution $f(\mathbf{v})$ can be considered to represent an observer's beliefs about the probability of all possible election outcomes.
+
+A single vote can move candidate $j$ ahead of candidate $i$ when $v_i - v_j \in (0, \frac{1}{n})$, where $n$ is the total size of the electorate. Without loss of generality, the probability that a single vote can elect candidate 2 instead of 1 is  
+\[ \pi_{12} = \text{Pr}\left( v_1 > v_k \, \forall \, k > 1  \, \cap \, v_1 - v_2 \in \left(0, \frac{1}{n}\right) \right)
+\]
+which for three candidates can be written as 
+\[
+\pi_{12} = \int_{x_1 = \frac{1}{3}}^{\frac{1}{2}} \int_{x_2 = x_1 - \frac{1}{n}}^{x_1} f(x_1, x_2, 1 - x_1 - x_2) \, \text{d}x_2 \, \text{d}x_1
+\]
+and for $K \geq 3$ candidates can be written as  
+\[ \pi_{12} = 
+\int_{x_1 = \frac{1}{K}}^{\frac{1}{2}} \int_{x_2 = x_1 - \frac{1}{n}}^{x_1} \int_{x_3 = 0}^{x_1} \cdots \int_{x_K = 0}^{x_1} f(x_1, x_2, x_3, \ldots, x_K) \, \text{d}x_K \, \ldots  \text{d}x_1.
+\]   
+
+Next, note that if $f(\mathbf{v})$ is smooth and the electorate $n$ is large, then 
+\begin{equation} 
+\pi_{12} \approx \frac{1}{n}
+\int_{y = \frac{1}{K}}^{\frac{1}{2}}  \int_{x_3 = 0}^{y} \cdots \int_{x_K = 0}^{y} f(y, y, x_3, \ldots, x_K) \, \text{d}x_K \, \ldots  \text{d}y. \label{estimand_eqn}
+\end{equation}
+That is, the probability of a single vote electing candidate 2 instead of candidate 1 is approximately $\frac{1}{n}$ times the integral along the hyperplane where candidate 1 and candidate 2 receive exactly the same vote share and all others receive less. 
+
+All of the methods below seek to estimate the integral in equation \@ref(eq:estimand_eqn), which approximates $n \pi_{12}$, the pivot probability before normalization for electorate size. To recover the approximate pivot probability, we therefore need to divide by $n$. 
+<!-- to get the pivot probability from This integral is our estimand. Thus our estimate of pivot probability e.g. $\pi_{12}$ should be considered an estimate of $n \pi_{12}$, to be normalized by dividing by the electorate size.  -->
+
+One implication of the above is that our estimate of $n \pi_{ij}$, the unnormalized probability of a single vote changing the winner from candidate $i$ to candidate $j$, will be the same as our estimate of $n \pi_{ji}$, the unnormalized probability of a single vote changing the winner from candidate $j$ to candidate $i$. We thus refer to both events with a single label $\pi_{ij}$. 
+
+[Q: Does our approach encompass three-way ties?]
+
+
+### Estimators 
+
+#### Monte Carlo Simulation 
+
+A simple way to estimate the integral in equation \ref{estimand_eqn} is to draw  a large number of simulated election results from $f(\mathbf{v})$, compute the proportion of results within some narrow window of the hyperplane where candidates 1 and 2 are exactly tied, and divide by the width of the window. 
+
+The figure below illustrates for the three-candidate case. We seek to approximate $n \pi_{ab}$, which is the integral of $f(\mathbf{v})$ along the boundary between $a$ and $b$'s win regions (the heavy line sloping up and to the right). We define a window centered on that boundary of width $w$. The integral of $f(\mathbf{v})$ over this window is approximately $w n \pi_{ab}$. (This approximation relies on the density being approximately flat orthogonally to the $ab$ win boundary.) We approximate this integral by drawing a large number of simulated elections, shown here as points on the ternary diagram, and computing the proportion falling in the designated window. We then divide by $w$ to approximate $n \pi_{ab}$. 
+
+```{r illustrate_mc, echo = F}
+alpha <- c(10, 8, 3)
+n <- 500
+X <- gtools::rdirichlet(n, alpha)
+colnames(X) <- c("a", "b", "c")
+
+eps <- .05
+
+as_tibble(X) %>% 
+  mutate(x = a + .5*b,
+         y = sqrt(3/4)*b,
+         in_window = abs(a - b) < eps & a > c & b > c) -> X_df
+
+plurality_tie_df <- tibble(
+  type = c("ab", "ac", "bc"),
+  bold = c(1, 0, 0),
+  a = c(1/2, 1/2, 0),
+  b = c(1/2, 0, 1/2),
+  c = c(0, 1/2, 1/2)
+  ) %>% bind_rows(
+    tibble(type = c("ab", "ac", "bc"), a = 1/3, b = 1/3, c = 1/3, bold = c(1, 0, 0))
+  )
+
+eps_line_df <- tibble(
+  type = c("a_low", "a_low", "a_high", "a_high"),
+  a = c(1/2 - eps/2, 1/3 - eps/2, 1/2 + eps/2, 1/3 + eps/2),
+  b = c(1/2 + eps/2, 1/3 + eps/2, 1/2 - eps/2, 1/3 - eps/2)) %>% 
+  mutate(c = 1 - a - b) 
+
+xy_df <- tibble(a = c(1/2 + eps/2, 1/2 - eps/2), b = c(1/2 - eps/2, 1/2 + eps/2), label = c("x", "y")) %>% mutate(x = a + .5*b, y = sqrt(3/4)*b)
+
+ X_df %>% 
+  ggplot(aes(x = x, y = y)) + 
+  geom_point(aes(col = in_window), alpha = .5, show.legend = F) + 
+  coord_fixed() + 
+  theme_void() + 
+  expand_limits(x = c(-.1, 1.1), y = sqrt(3/4)*c(-.1, 1.1)) + 
+  annotate(geom = "text", x = c(1,.5,0), y = c(0,sqrt(3/4),0) + .05*c(-1,1,-1), label = c("a", "b", "c")) + 
+  votevizr::geom_ternary_boundary() + 
+  geom_line(data = plurality_tie_df %>% filter(type %in% c("ac", "bc")) %>% mutate(x = a + .5*b, y = sqrt(3/4)*b),
+            aes(x = x, y = y, group = type), lwd = .5) + 
+  geom_line(data = plurality_tie_df %>% filter(type %in% c("ab")) %>% mutate(x = a + .5*b, y = sqrt(3/4)*b),
+            aes(x = x, y = y, group = type), lwd = 1) + 
+  geom_line(data = eps_line_df %>% mutate(x = a + .5*b, y = sqrt(3/4)*b),
+            aes(x = x, y = y, group = type), linetype = 2) + 
+  geom_point(data = xy_df, aes(x = x, y = y)) + 
+  geom_text(data = xy_df, aes(x = x, y = y, label = label), position = position_nudge(x = .02, y = .01))
+
+
+```
+
+Note that if the window is defined to include election results where $|v_a - v_b| < \epsilon$ (and $v_a > v_c$ and $v_b > v_c$), then $w = \sqrt{2} \varepsilon$. To see this, note that points $x$ and $y$ on the figure below are located at coordinates $\left(\frac{1}{2} + \frac{\varepsilon}{2}, \frac{1}{2} - \frac{\varepsilon}{2}, 0\right)$ and $\left(\frac{1}{2} - \frac{\varepsilon}{2}, \frac{1}{2} + \frac{\varepsilon}{2}, 0\right)$, respectively, and the distance between them is therefore $\sqrt{\varepsilon^2 + \varepsilon^2} = \sqrt{2}\varepsilon$. This is true regardless of the number of candidates.   
+
+The main advantage of the Monte Carlo approach is its flexibility: we can apply it as long as we can sample from the distribution of election outcomes. (It is also relativly simple to extend to other voting systems.) A disadvantage is that, especially for very unlikely pivot events, we may need to draw a very large sample in order to get precise estimates. The simple approach outlined here could be modified to improve precision, e.g. through importance sampling or choosing $\epsilon$ adaptively. 
+
+
+<!-- In some applications, results may differ substantively depending on whether 1 billion draws randomly produce 1 tie or 0 ties. (For example, when one candidate has a large expected lead over several highly substitutable challengers, this random variation may determine which one emerges as the leading challenger.) One could argue that it is a problem with the research design if the conclusions depend substantially on random variation in the Monte Carlo. At the very least, it is inconvenient to have  -->
+
+<!-- depend on whether we an unlikely pivot event is estimated to have probability  -->
+
+#### Eggers-Vivyan
+
+Eggers \& Vivyan introduced an approach for efficiently approximating pivot probabilities for $K$-candidate plurality elections using an independence assumption. Specifically, let $f_{V_1, V_2}(v_1, v_2)$ denote the marginal density of candidate 1's and 2's vote shares and let $f_{V_j \mid V_1, V_2}(v_j \mid v_1, v_2)$ denote the marginal density of candidate $j$'s vote share conditional on candidate 1's and 2's vote shares. Then we might approximate $n \pi_{12}$ as 
+\begin{equation} 
+n \pi_{12} \approx \int_{\frac{1}{K}}^{\frac{1}{2}}  f_{V_1, V_2}(y, y) \prod_{i = 3}^{K} \int_{0}^{y} f_{V_i \mid V_1, V_2}(z \mid y, y) dz \, dy.
+\end{equation}
+In words, the key independence assumption in this expression is that the probability of candidates $3, \ldots, K$ *all* receiving a vote share less than $y$ (given that candidates 1 and 2 have each received $y$) can be approximated by the product of the probabilities of *each* candidate receiving less than $y$.  
+
+Given this assumption, Eggers \& Vivyan show that, for the case where $f(\mathbf{v})$ is a Dirichlet density with parameter vector $(\alpha_1, \alpha_2, \ldots, \alpha_K)$, the $n \pi_{12}$ can be approximated by 
+\begin{equation}
+\pi_{12} \approx \frac{1}{n}
+\int_{y = \frac{1}{K}}^{\frac{1}{2}} \text{Dir}\left( y, y, 1 - 2y; \alpha_1, \alpha_2, \sum_{j = 3}^{K} \alpha_j \right) \times \prod_{i = 3}^{K} \int_{0}^{y} \text{Beta}\left(\frac{z}{1 - 2y}; \alpha_i,  \sum_{j = 3}^{K} \alpha_j - \alpha_i \right) dz \, dy.
+\end{equation}
+For computation, the outer integral can be handled numerically: divide the line from $(\frac{1}{K}, \frac{1}{K}, 1 - \frac{2}{K})$ to $(\frac{1}{2}, \frac{1}{2}, 0)$ into $M$ equal seqments, compute the integrand at each segment midpoint, and multiply the sum by the distance between segment midpoints (which is $\sqrt{6} \frac{1}{M} \left(\frac{1}{2} - \frac{1}{K}\right)$). 
+<!-- #TODO: check that  -->
+
+In the case of three candidates, the Eggers-Vivyan approach yields $n \pi_{12}$ exactly (as the number of segment midpoints $M$ goes to infinity). With more candidates, the degree of accuracy depends on how realistic the independence assumption is. It may be least realistic in cases where the $K$ candidates have approximately equal expected strength. If $\alpha_1 = \alpha_2 = \alpha_3 = \alpha_4$, for example, then the probability of candidates 1 and 2 finishing tied for first at around $.25 + \varepsilon$ should be the probability of candidates 1 and 2 each receiving around $.25 + \varepsilon$ times the probability of candidates 3 and 4 almost perfectly dividing the remaining vote share (such that neither is above $.25 + \varepsilon$), which is bound to be a very small number. In the Eggers \& Vivyan approach, however, the probability of candidates 1 and 2 finishing tied for first around $.25 + \varepsilon$ is the probability of candidates 1 and 2 each receiving around $.25 + \varepsilon$ times the probability of candidate 3 finishing below .25 (which is approximately 1/2) times the probability of candidate 3 finishing below .25 (which is approximately 1/2). (The discrepancy for the same case will be less stark when we consider ties for first at higher values.) 
+
+
+#### Grid-based
+
+Make a grid of points that satisfy the conditions. Visualization in 3D? Definitely.  
+
+Good for generality. 
+
+#### Simplicial Cubature 
+
+Make a mesh of simplices that satisfy the conditions; use Genz & Cools algorithm to numerically integrate $f(\mathbf{v})$ on these facets.  
+
+Good for generality, precision. 
+
 
 ## Objective 
 
@@ -18,23 +157,25 @@ devtools::load_all(".")
 library(tidyverse)
 ```
 
-### A single case, Dirichlet beliefs
+## Three candidates
 
-#### Computing pivot probabilities 
+### Dirichlet beliefs 
+
+#### Computing pivot probabilities for one case
 
 Here we show how to get the pivot probability for a single case by different methods. 
 
 ```{r case_3, cache = T}
-# ch
+# chan
 alpha <- c(10, 7, 4)
 sims <- gtools::rdirichlet(n = 1000000, alpha = alpha)
 
-ev <- plurality_pivot_probs(method = "eggers-vivyan", alpha = alpha)
-mf <- plurality_pivot_probs(method = "myatt-fisher", alpha = alpha)
+ev <- plurality_pivot_probs(method = "eggers-vivyan", alpha = alpha, increments = 200)
+# mf <- plurality_pivot_probs(method = "myatt-fisher", alpha = alpha)
 sc <- plurality_pivot_probs(method = "simplicial-cubature", alpha = alpha)
 sim1 <- plurality_pivot_probs(method = "simulation", alpha = alpha, n = 100000) 
 sim2 <- plurality_pivot_probs(method = "simulation", sims = sims)
-gb <- plurality_pivot_probs(method = "grid-based", alpha = alpha, increment = .026)
+gb <- plurality_pivot_probs(method = "grid-based", alpha = alpha, increment = .001)
 
 ```
 
@@ -44,7 +185,7 @@ gb <- plurality_pivot_probs(method = "grid-based", alpha = alpha, increment = .0
 pps <- names(ev)
 bind_rows(
   tibble(type = "ev", pp = pps, value = unlist(ev)),
-  tibble(type = "mf", pp = pps, value = unlist(mf)),
+  # tibble(type = "mf", pp = pps, value = unlist(mf)),
   tibble(type = "sc", pp = pps, value = unlist(sc)),
   tibble(type = "sim1", pp = pps, value = unlist(sim1)),
   tibble(type = "sim2", pp = pps, value = unlist(sim2)),
@@ -60,7 +201,7 @@ df %>%
 
 ```
 
-We see that they are close but not exactly the same. Grid-based and Myatt-Fisher are particularly far from the simulation results. Eggers-Vivyan and Simplicial Cubatare agree exactly; this makes sense because they are both doing numerical integration along a line. 
+We see that they are close but not exactly the same. Grid-based and Myatt-Fisher are particularly far from the simulation results. Eggers-Vivyan and Simplicial Cubature agree exactly; this makes sense because they are both doing numerical integration along a line. 
 
 #### Comparing absolute pivot probabilities across methods 
 
@@ -101,12 +242,12 @@ target
 The numerical integration methods produce that exactly; simulation and grid-based come close:
 
 ```{r target_practice, cache = T}
-alpha <- rep(1,3)
+alpha <- rep(1,3) # cha
 ev <- plurality_pivot_probs(method = "eggers-vivyan", alpha = alpha)
 sc <- plurality_pivot_probs(method = "simplicial-cubature", alpha = alpha)
 sim <- plurality_pivot_probs(method = "simulation", alpha = alpha, n = 500000) 
-gb <- plurality_pivot_probs(method = "grid-based", alpha = alpha, increment = .026)
-tibble(`Method` = c("Eggers-Vivyan", "Simplicial Cubature", "Monte Carlo", "Grid-based"), `Estimate` = c(ev$ab, sc$ab, sim$ab, gb$ab)) %>%   mutate(`Percent error` = 100*(`Estimate` - target)/target) %>% 
+gb <- plurality_pivot_probs(method = "grid-based", alpha = alpha, increment = .001)
+tibble(`Method` = c("Eggers-Vivyan", "Simplicial Cubature", "Monte Carlo (500k)", "Grid-based"), `Estimate` = c(ev$ab, sc$ab, sim$ab, gb$ab)) %>%   mutate(`Percent error` = 100*(`Estimate` - target)/target) %>% 
   knitr::kable(format = "html") %>% 
   kableExtra::kable_styling(full_width = F)
 ```
@@ -114,158 +255,131 @@ tibble(`Method` = c("Eggers-Vivyan", "Simplicial Cubature", "Monte Carlo", "Grid
 
 #### Variation in syntax
 
-Here are some alterative ways we can specify the distribution.
+We can also pass a vector of expected vote shares (`mu`) and a scalar precision paramter (`precision`), as shown here: 
 
 ```{r case_3a, cache = T}
-# ch
+# ch a
 alpha <- c(10, 7, 4)
 v_vec <- alpha/sum(alpha)
 precision <- sum(alpha)
 
 ev <- plurality_pivot_probs(method = "eggers-vivyan", mu = v_vec, precision = precision)
-mf <- plurality_pivot_probs(method = "myatt-fisher", mu = v_vec, precision = precision)
+# mf <- plurality_pivot_probs(method = "myatt-fisher", mu = v_vec, precision = precision)
 sc <- plurality_pivot_probs(method = "simplicial-cubature", mu = v_vec, precision = precision)
 gb <- plurality_pivot_probs(method = "grid-based", mu = v_vec, precision = precision, increment = .02)
 
 ```
 
 
-### A single case, Normal beliefs
+### Logistic normal beliefs
 
-For the `simplicial-cubature` and `grid-based` methods we can also compute the pivot probability with multivariate normal beliefs. We can compare these with simulation based results. 
+For the `simplicial-cubature` and `grid-based` methods we can also compute the pivot probability with logistic normal beliefs. (See note on distributions on the simplex in `notes/`.) We can compare these with simulation based results. 
 
-#### Computing pivot probabilities 
+### Computing pivot probabilities for a single case
 
 Here we show how to get the pivot probability for a single case by different methods. 
 
-```{r case_3_mvnorm, cache = T}
-# chang
-mu <- c(.4, .35, .25) 
-sigma <- diag(3)*c(.04^2, .03^2, .02^2)
+```{r case_3_ln, cache = T}
+# change  
+mu <- c(0, 0, 0) 
+sigma <- diag(3)*.25
+sigma[3,3] <- 0
 
+sc <- plurality_pivot_probs(method = "simplicial-cubature", mu = mu, sigma = sigma, report_issues = T, tol = .05, maxEvals = 50000)
+gb <- plurality_pivot_probs(method = "grid-based", mu = mu, sigma = sigma, increment = .001)
 
-sc <- plurality_pivot_probs(method = "simplicial-cubature", mu = mu, sigma = sigma)
-gb <- plurality_pivot_probs(method = "grid-based", mu = mu, sigma = sigma, increment = .005)
-
-sims <- mvtnorm::rmvnorm(n = 100000, mean = mu, sigma = sigma)
-sims <- sims[apply(sims, 1, min) > 0,]
-sims <- sims[apply(sims, 1, max) < 1, ] 
+sims <- rlogisticnormal(n = 500000, mu = mu, sigma = sigma)
 
 sim_result <- plurality_pivot_probs(method = "simulation", sims = sims)
 
 ```
 
-```{r look_it}
-sc 
-gb
-sim_result
+```{r comparison_for_ln}
+tibble(`Pivot event` = c("ab", "ac", "bc"),
+       Simulation = unlist(sim_result),
+       `Simplicial Cubature` = unlist(sc),
+       `Grid` = unlist(gb)) %>% 
+  knitr::kable(format = "html") %>% 
+  kableExtra::kable_styling(full_width = F)
 ```
 
-So we get approximately the same answer for `ab` with all methods, but `simplicial-cubature` and `grid-based` differ from `simulation` for the `ac` and `bc` for the others. (They are similar to each other on these; the difference might be due to numerical integration issues.) This suggests that shuffling indices isn't correct. At first I thought the normalizing constant might differ across pivot probs, but on reflection that's not correct. Then I wondered if the `sigma` matrix gets garbled when we reshuffle the indices, but it seems correct: 
 
-```{r check_shuffle}
-expand_grid(x = "x", a = 1:3, b = 1:3) %>% mutate(d = paste0(x, a, b)) %>% pull(d) -> d
-m <- matrix(d, nrow = 3, ncol = 3, byrow = T)
-m
-m[c(1,3,2), c(1,3,2)]
+## Four candidates 
+
+
+### Dirichlet 
+
+```{r case_4_dir, cache = T}
+# change 
+alpha <- c(15, 13, 7,6)
+
+ev <- plurality_pivot_probs(method = "eggers-vivyan", alpha = alpha)
+sc <- plurality_pivot_probs(method = "simplicial-cubature", alpha = alpha, report_issues = T, tol = .1)
+gb <- plurality_pivot_probs(method = "grid-based", alpha = alpha)
+sim_result <- plurality_pivot_probs(method = "simulation", n = 500000, alpha = alpha)
 ```
 
-Let's try a case where all three pivot probs should be the same: 
-
-```{r case_3_mvnorm_special_case, cache = T}
-# change
-mu_sc <- rep(1/3, 3) 
-sigma_sc <- diag(3)*c(.04^2)
-
-sc <- plurality_pivot_probs(method = "simplicial-cubature", mu = mu_sc, sigma = sigma_sc)
-gb <- plurality_pivot_probs(method = "grid-based", mu = mu_sc, sigma = sigma_sc, increment = .005)
-
-sims <- mvtnorm::rmvnorm(n = 100000, mean = mu_sc, sigma = sigma_sc)
-sims <- sims[apply(sims, 1, min) > 0,]
-sims <- sims[apply(sims, 1, max) < 1, ] 
-
-sim_result <- plurality_pivot_probs(method = "simulation", sims = sims)
-
-```
-
-```{r look_it_special_case}
-sc 
-gb
-sim_result
+```{r comparison_dir_4}
+tibble(`Pivot event` = c("ab", "ac", "ad", "bc", "bd", "cd"),
+       Simulation = unlist(sim_result),
+       `Eggers-Vivyan` = unlist(ev), 
+       `Simplicial Cubature` = unlist(sc),
+       `Grid` = unlist(gb)) %>% 
+  knitr::kable(format = "html") %>% 
+  kableExtra::kable_styling(full_width = F)
 ```
 
 
 
-Let's do things explicitly. 
+### Logistic normal 
 
-```{r sc_explicit}
-S <- plurality_simplices_to_integrate(3)
-out <- SimplicialCubature::adaptIntegrateSimplex(f = mvnorm_for_integration, S = S, mu = mu, sigma = sigma)
-# out
-normalizer <- SimplicialCubature::adaptIntegrateSimplex(f = mvnorm_for_integration, S = diag(3), mu = mu, sigma = sigma)$integral
+```{r case_4_ln, cache = T}
+# change 
+mu <- c(.4, .3, -.2,0) # rep(0, 3) # c(.1, 0, -.1)
+sig_a <- .85
+sig_b <- .65
+sig_c <- .45
+sig_ab <- .05
+sig_ac <- .05
+sig_bc <- .05
+sigma <- matrix(c(sig_a^2, sig_ab, sig_ac,0,
+                  sig_ab, sig_b^2, sig_bc,0,
+                  sig_ac, sig_bc, sig_c^2,0,
+                  0,0,0,0),
+                ncol = 4, nrow = 4, byrow = T)
 
-out$integral/normalizer
-
-out_ac <- SimplicialCubature::adaptIntegrateSimplex(f = mvnorm_for_integration, S = S, mu = mu[c(1,3,2)], sigma = sigma[c(1,3,2),c(1,3,2)])
-out_ac$integral/normalizer
-
-out_ac2 <- SimplicialCubature::adaptIntegrateSimplex(f = mvnorm_for_integration, S = S[c(1,3,2),,], mu = mu, sigma = sigma)
-out_ac2$integral/normalizer
-
+sc <- plurality_pivot_probs(method = "simplicial-cubature", mu = mu, sigma = sigma, report_issues = T, tol = .1)
+gb <- plurality_pivot_probs(method = "grid-based", mu = mu, sigma = sigma)
+sim_result <- plurality_pivot_probs(method = "simulation", n = 500000, mu = mu, sigma = sigma)
 ```
 
-
-```{r relative_plot_mvnorm}
-pps <- names(sc)
-bind_rows(
-  tibble(type = "sc", pp = pps, value = unlist(sc)),
-  tibble(type = "gb", pp = pps, value = unlist(gb)),
-  tibble(type = "sim", pp = pps, value = unlist(sim_result))) -> df
-
-df %>%
-  pivot_wider(names_from = pp, values_from = value) %>%
-  mutate(ab_ac = ab/ac, ab_bc = ab/bc) %>%
-  ggplot(aes(x = ab_ac, y = ab_bc, col = type, shape = type)) +
-  geom_point() +
-  labs(x = "Ratio of ab pivot prob to ac pivot prob", y = "Ratio of ab pivot prob to bc pivot prob")
-
+```{r comparison_ln_4}
+tibble(`Pivot event` = c("ab", "ac", "ad", "bc", "bd", "cd"),
+       Simulation = unlist(sim_result),
+       `Simplicial Cubature` = unlist(sc),
+       `Grid` = unlist(gb)) %>% 
+  knitr::kable(format = "html") %>% 
+  kableExtra::kable_styling(full_width = F)
 ```
-
-
-
-#### Comparing absolute pivot probabilities across methods 
-
-Absolute pivot probabilities are important for comparing strategic voting incentives across different elections or voting methods. 
-
-First we show that the methods agree in this one case. 
-
-
-<!-- ```{r absolutes_mvnorm} -->
-<!-- target <- df %>% filter(type == "sim") -->
-
-<!-- df %>% filter(! type %in% c("sim")) %>%  -->
-<!--   left_join(target, by = "pp", suffix = c("", "_sim1M")) %>%  -->
-<!--   ggplot(aes(x = value_sim1M, y = value, col = type, shape = pp)) +  -->
-<!--   geom_point(alpha = .85) + -->
-<!--   scale_x_log10() +  -->
-<!--   scale_y_log10() + -->
-<!--   geom_abline(intercept = 0, slope = 1, lty = 2, alpha = .3) + -->
-<!--   labs(x = "Estimated pivot probability by simulation (1M)", y = "Estimated pivot probability by other method", shape = "Pivot event", col = "Method") -->
-
-<!-- ``` -->
 
 
 ## Next steps 
 
-In the code for `plurality_pivot_probs()` there is still some awkwardness: 
-
-- error checking in that function vs in the underlying function
-- handling arguments by passing explicitly vs using `exec()` and `!!!args`
-
 Other things still to do: 
 
-- for methods other than Myatt-Fisher, we need to do some work on the normalization
-- we need to document performance -- speed, RMSE relative to simulation (once we have the normalization worked out) 
+- more grid points by default 
+- increments for Eggers & Vivyan 
+- higher maxEvals by default
+- fix up the document introducing logistic normal, which will fail due to the new syntax
+- large number of simulations, i.e. draw parameters, get piv probs, store, compare
+- document functions 
+- functions for exploring logistic normal distribution -- e.g. slices of ternary in 4d
+- Myatt Fisher
+    - math: write it up 
+    - Myatt-Fisher normalization?  
+- document performance (speed, variance reduction, etc) 
+- 5 candidates 
+- try to show Eggers Vivyan doing worse than SimplicialCubature 
 - we need to write a paper: make a figure, write down some math, etc. 
 - obviously positional methods, Condorcet, PR are still out there too 
 

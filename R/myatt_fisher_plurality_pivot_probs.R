@@ -1,3 +1,22 @@
+myatt_fisher_plurality_pivot_probs <- function(alpha = NULL, mu = NULL, precision = NULL, cand_names = NULL, sep = ""){
+
+  if(is.null(alpha)){
+    if(is.null(mu) | is.null(precision)){
+      stop("You must pass either 'alpha' OR 'mu' and 'precision'.")
+    }
+    alpha <- mu*precision
+  }
+  if(is.null(cand_names)){cand_names <- letters[1:3]}
+
+  out <- list()
+  for(i in 1:2){
+    for(j in (i+1):3){
+      out[[paste0(cand_names[i], sep, cand_names[j])]] <- one_myatt_fisher_plurality_pivot_prob(c(alpha[c(i,j)], alpha[-c(i,j)]))
+    }
+  }
+  out
+}
+
 incomplete_beta <- function(x,a,b){
   pbeta(x,a,b)*beta(a,b)
 }
@@ -7,16 +26,6 @@ one_myatt_fisher_plurality_pivot_prob <- function(alpha){
   (2^alpha[3])*incomplete_beta_part/(2^(sum(alpha) + 1))
 }
 
-myatt_fisher_plurality_pivot_probs <- function(alpha, cand_names = NULL, sep = ""){
-  if(is.null(cand_names)){cand_names <- letters[1:3]}
-  out <- list()
-  for(i in 1:2){
-    for(j in (i+1):3){
-      out[[paste0(cand_names[i], sep, cand_names[j])]] <- one_myatt_fisher_plurality_pivot_prob(c(alpha[c(i,j)], alpha[-c(i,j)]))
-    }
-  }
-  out
-}
 
 # this was the code previously tested
 # posterior.pivotal.probability = function(pie.vec, s, which.ones = c(1,1,0), prior = 1){

@@ -1,4 +1,22 @@
 
+eggers_vivyan_plurality_pivot_probs <- function(alpha = NULL, mu = NULL, precision = NULL, increments = 50, cand_names = NULL, sep = ""){
+  if(is.null(alpha)){
+    if(is.null(mu) | is.null(precision)){
+      stop("You must pass either 'alpha' OR 'mu' and 'precision'.")
+    }
+    alpha <- mu*precision
+  }
+  if(is.null(cand_names)){cand_names <- letters[1:3]}
+  out <- list()
+  for(i in 1:(length(alpha) - 1)){
+    for(j in (i + 1):length(alpha)){
+      out[[paste0(cand_names[i], sep, cand_names[j])]] <- probability_of_tie_for_first(alpha = c(alpha[c(i, j)], alpha[-c(i,j)]), increments = increments)$estimate # I once divided by n here -- but this can be done later.
+    }
+  }
+  out
+}
+
+
 napotffay <- function(alpha, y){
   # naive.analytical.probability.of.tie.for.first.at.y
   # probability that parties 1 and 2 tie at y can be calculated without specifying the values of the other parties, by the aggregation property.
@@ -49,13 +67,3 @@ probability_of_tie_for_first <- function(alpha, increments = 50){
        ys = midpoints, tie_vec = tie_vec, prob_mat = prob_mat) # I include these for diagnostic purposes
 }
 
-eggers_vivyan_plurality_pivot_probs <- function(alpha, increments = 50, cand_names = NULL, sep = ""){
-  if(is.null(cand_names)){cand_names <- letters[1:3]}
-  out <- list()
-  for(i in 1:(length(alpha) - 1)){
-    for(j in (i + 1):length(alpha)){
-      out[[paste0(cand_names[i], sep, cand_names[j])]] <- probability_of_tie_for_first(alpha = c(alpha[c(i, j)], alpha[-c(i,j)]), increments = increments)$estimate # I once divided by n here -- but this can be done later.
-    }
-  }
-  out
-}

@@ -12,6 +12,19 @@ library(patchwork)
 devtools::load_all(".")
 ```
 
+## Todo
+
+Fix implementation below to fit with new way I parameterize it. 
+
+Consider listing others: 
+
+- Ongaro
+- concrete distribution 
+- other generalized Dirichlets
+- Generalized Liouville Distribution (see Gupta and Song 1996)
+
+Probably looking at a textbook would help here. Boogaart book? 
+
 ## Dirichlet 
 
 For the Dirichlet I use the `gtools` functions, but this is written in a pretty poor way -- I wonder if I can speed things up by vectorizing that function.

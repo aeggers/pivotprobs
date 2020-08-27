@@ -1,3 +1,48 @@
+simplicial_cubature_based_plurality_pivot_probs <- function(alpha = NULL, mu = NULL, precision = NULL, sigma = NULL, cand_names = NULL, sep = "", report_issues = F, full_output = F, ...){
+
+  if(!is.null(alpha) | (!is.null(mu) & !is.null(precision)) & is.null(sigma)){
+    # this is Dirichlet
+    distribution = "dirichlet"
+    if(is.null(alpha)){alpha <- mu*precision}
+    k <- length(alpha)
+  }else if(!is.null(mu) & !is.null(sigma)){
+    # this is logistic normal
+    distribution = "logisticnormal"
+    k <- length(mu)
+  }
+
+  if(is.null(cand_names)){cand_names <- letters[1:k]}
+
+  S <- plurality_simplices_to_integrate(k)
+
+  out <- list()
+  for(i in 1:(k-1)){
+    for(j in (i+1):k){
+      these_indices <- c(i,j,(1:k)[-c(i,j)])
+      this_name <- paste0(cand_names[i], sep, cand_names[j])
+      if(distribution == "dirichlet"){
+        out[[this_name]] = SimplicialCubature::adaptIntegrateSimplex(f = dirichlet_for_integration, S = S, alpha = alpha[these_indices], ...)
+      }else if(distribution == "logisticnormal"){
+        out[[this_name]] = SimplicialCubature::adaptIntegrateSimplex(f = logisticnormal_for_integration, S = S, mu = mu[these_indices], sigma = sigma[these_indices, these_indices], ...)
+      }
+    }
+  }
+
+  if(report_issues){
+    msgs <- out %>% map("message")
+    if(length(unique(msgs)) != 1){
+      cat("Messages from SimplicialCubature::adaptIntegrateSimplex: \n", paste(msg, collapse = "\n"))
+    }
+  }
+
+  if(full_output){
+    out
+  }else{
+    out %>% map("integral")
+  }
+
+}
+
 
 cand_a_win_region_vertices_from_win_conditions <- function(win_conditions){
 
@@ -110,7 +155,7 @@ plurality_simplices_to_integrate <- function(k){
   S_array_from_win_conditions(cbind(rep(1, k-1), -diag(k-1)))
 }
 
-
+# not used
 simplicial_cubature_plurality_pivot_probs_dirichlet <- function(alpha, cand_names = NULL, sep = "", full_output = F, ...){
 
   out <- list()
@@ -127,6 +172,13 @@ simplicial_cubature_plurality_pivot_probs_dirichlet <- function(alpha, cand_name
     }
   }
 
+  if(report_issues){
+    msgs <- out %>% map("message")
+    if(length(unique(msgs)) != 1){
+      cat("Messages from SimplicialCubature::adaptIntegrateSimplex: \n", paste(msg, collapse = "\n"))
+    }
+  }
+
   if(full_output){
     out
   }else{
@@ -135,12 +187,13 @@ simplicial_cubature_plurality_pivot_probs_dirichlet <- function(alpha, cand_name
 
 }
 
-simplicial_cubature_plurality_pivot_probs_mvnorm <- function(mu, sigma, cand_names = NULL, sep = "", full_output = F, report_issues = T, normalizing_factor = 1, ...){
+# not used
+simplicial_cubature_plurality_pivot_probs_logisticnormal <- function(mu, sigma, cand_names = NULL, sep = "", full_output = F, report_issues = T, normalizing_factor = 1, ...){
 
   out <- list()
-  k <- length(mu)
+  k <- length(mu) + 1 # key difference from dirichlet here.
   S <- plurality_simplices_to_integrate(k)
-  if(is.null(cand_names)){cand_names <- letters[1:k]}
+  if(is.null(cand_names)){cand_names <- letters[1:(k+1)]}
 
   all_indices <- 1:k
 
@@ -148,7 +201,7 @@ simplicial_cubature_plurality_pivot_probs_mvnorm <- function(mu, sigma, cand_nam
     for(j in (i+1):k){
       these_indices <- c(i,j,all_indices[-c(i,j)])
       the_name <- paste0(cand_names[i], sep, cand_names[j])
-      out[[the_name]] = SimplicialCubature::adaptIntegrateSimplex(f = mvnorm_for_integration, S = S, mu = mu[these_indices], sigma = sigma[these_indices, these_indices], ...)
+      out[[the_name]] = SimplicialCubature::adaptIntegrateSimplex(f = logisticnormal_for_integration, S = S[these_indices,,], mu = mu, sigma = sigma, ...) # note that I spin around the S rather than the mu and sigma
       out[[the_name]]$integral <- out[[the_name]]$integral/normalizing_factor
     }
   }
@@ -172,9 +225,15 @@ simplicial_cubature_plurality_pivot_probs_mvnorm <- function(mu, sigma, cand_nam
 ## integrand functions
 
 dirichlet_for_integration <- function(x, alpha){
-  out <- gtools::ddirichlet(as.vector(x), alpha)/sqrt(length(alpha)) # correction for dimensionality
+  out <- gtools::ddirichlet(as.vector(x), alpha)/sqrt(length(alpha)) # normalizing constant so that is sums to 1 on the unit simplex
   ifelse(is.nan(out) | is.infinite(out), 0, out)
 }
+
+logisticnormal_for_integration <- function(x, mu, sigma){
+  out <- dlogisticnormal(as.vector(x), mu, sigma)/sqrt(length(mu)) # normalizing constant so that is sums to 1 on the unit simplex
+  ifelse(is.nan(out) | is.infinite(out), 0, out)
+}
+
 
 # #to see need for this correction:
 # naive_dirichlet_fn <- function(x, alpha){
@@ -187,10 +246,10 @@ dirichlet_for_integration <- function(x, alpha){
 # SimplicialCubature::adaptIntegrateSimplex(naive_dirichlet_fn, S = diag(5), alpha = c(5,4,3, 2, 2), tol = .1, maxEvals = 100000)  # returns sqrt(5)
 # SimplicialCubature::adaptIntegrateSimplex(dirichlet_for_integration, S = diag(5), alpha = c(5,4,3, 2,2), tol = .1, maxEvals = 100000) returns 1
 
-
-mvnorm_for_integration <- function(x, mu, sigma){
-  mvtnorm::dmvnorm(as.numeric(x), mean = mu, sigma = sigma)
-}
+# this was not a good idea.
+# mvnorm_for_integration <- function(x, mu, sigma){
+#   mvtnorm::dmvnorm(as.numeric(x), mean = mu, sigma = sigma)
+# }
 
 # SimplicialCubature::adaptIntegrateSimplex(mvnorm_for_integration, S = diag(3), mu = c(.4, .35, .25), sigma = diag(3)*.02)
 
