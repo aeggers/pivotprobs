@@ -1,0 +1,117 @@
+---
+title: "Methods for computing pivot probabilities"
+author: "Andy Eggers"
+date: "28 August 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+
+## Motivation: pivot events and pivot probabilities
+
+Pivot events are election outcomes in which a single vote can change the election outcome. A pivot probability is the probability of a given pivot event occuring. Computing pivot probabilities is important for determining the optimal (strategic) vote, for computing how much a voter gains by voting strategically rather than sincerely, and for assessing a voting system's susceptibility to strategic voting.
+
+[More on pivot events -- examples?]
+
+
+## Voting rules and win conditions 
+
+Consider a voting system to elect a single winner from among $K$ candidates. Let $\mathcal{B}$ denote the set of admissible ballots, with $|\mathcal{B}| = B$; let $v_b$ denote the share of all voters casting ballot $b$, with $v_b \in [0,1] \, \forall \, b \in \mathcal{B}$ and $\sum_{i \in \mathcal{B}} v_i = 1$. 
+
+A voting system that is anonymous (meaning that it only the count of ballots matters, not who submitted them) and neutral (meaning that it treats each candidate equally) can be characterized by defining the set of admissible ballots $\mathcal{B}$ and a set of *win conditions*, which are linear inequalities on $\mathbf{v}$ such that a given candidate wins. 
+
+For example, plurality is the voting system where each admissible ballot names one candidate (so that $v_i$ is the share of votes for candidate $i$) and candidate $a$ wins if 
+\[v_a > v_j \, \forall \, j \neq a.\]
+(Note that we ignore ties here to avoid tedious notation: this is harmless if we assume that vote shares are drawn from a continuous probability distribution.)[^simplify_fn] 
+
+[^simplify_fn]: An alternative way to simplify exposition is to assume a fixed rule for determining the winner when two candidates receive the same vote share, such as lexicographic precedence. 
+
+In the broader class of positional methods such as Borda count, voters submit rankings of candidates and each candidate $i$ receives a score $s_i$ that depends on how many of each ranking she receives and how much each ranking is worth. For example, given $k$ candidates, a $k$th-place ranking is worth $K - k$ points in Borda count; in anti-plurality, it is worth 0 points if $k = K$ and 1 otherwise; in plurality it is worth 1 point if $k = 1$ and 0 otherwise.) Then candidate $a$ wins if 
+\[s_a > s_j \, \forall \, j \neq a.\]
+<!-- and each candidate is assigned a score based on  -->
+<!-- Borda count is the voting system where each voter submits a ranking of candidates, candidate $i$'s score (given three candidates $i$,$j$, and $k$) is $s_i = v_{ijk} + v_{ikj} + \frac{1}{2}\left(v_{jik} + v_{kij}\right)$, and candidate $a$ wins if -->
+<!-- \begin{align} -->
+<!-- s_a >& s_b  \qquad \text{and} \nonumber \\  -->
+<!-- s_a >& s_c.  -->
+<!-- \end{align} -->
+
+Instant-runoff voting (IRV, also known by other names including ranked-choice voting, the alternative vote system, and the single-transferrable vote) is a voting system where each voter submits a ranking of candidates and (given three candidates $a$, $b$, and $c$) candidate $a$ wins if
+\begin{align}
+v_{abc} + v_{acb} >&  v_{cab} + v_{cba} \\ 
+v_{bac} + v_{bca} >&  v_{cab} + v_{cba}  \\ 
+v_{abc} + v_{acb} + v_{cab} >&  v_{bac} + v_{bca} + v_{cba} \\
+\text{or}& \\
+v_{abc} + v_{acb} >&  v_{bac} + v_{bca} \\  
+v_{cab} + v_{cba} >&  v_{bac} + v_{bca} \\  
+v_{abc} + v_{acb} + v_{bac} >&  v_{cab} + v_{cba} + v_{bca}. 
+\end{align}
+
+A Condorcet method is a voting system where each voter submits a ranking of candidates and (given three candidates $a$, $b$, and $c$) candidate $a$ is the Condorcet winner if 
+\begin{align}
+v_{abc} + v_{acb} + v_{cab} >&  v_{bac} + v_{bca} + v_{cba}  \\ 
+v_{abc} + v_{acb} + v_{bac} >&  v_{cab} + v_{cba} + v_{bca}. 
+\end{align}
+Typically a Condorcet method would specify a rule for determining who wins if there is no Condorcet winner. In the Kemeny-Young method for three candidates, for example, the candidate with the narrowest loss is the winner. That is, $a$ wins if \begin{align}
+v_{abc} + v_{acb} + v_{cab} >&  v_{bac} + v_{bca} + v_{cba} \\ 
+v_{abc} + v_{acb} + v_{bac} >&  v_{cab} + v_{cba} + v_{bca}  \\
+\text{or}& \\
+v_{abc} + v_{acb} + v_{cab} >&  v_{bac} + v_{bca} + v_{cba}  \\ 
+v_{bac} + v_{bca} + v_{abc} >& v_{cab} + v_{cba} + v_{acb}  \\ 
+v_{cab} + v_{cba} + v_{bca} >& v_{abc} + v_{acb} + v_{bac}  \\
+v_{abc} + v_{acb} + v_{bac} >& v_{bac} + v_{bca} + v_{cba} \\
+v_{abc} + v_{acb} + v_{bac} >& v_{cab} + v_{cba} + v_{acb}  \\ 
+\text{or}&  \\ 
+v_{abc} + v_{acb} + v_{cab} <&  v_{bac} + v_{bca} + v_{cba}  \\ 
+v_{bac} + v_{bca} + v_{abc} <& v_{cab} + v_{cba} + v_{acb} \\ 
+v_{cab} + v_{cba} + v_{bca} <& v_{abc} + v_{acb} + v_{bac} \\
+v_{abc} + v_{acb} + v_{cab} >& v_{bac} + v_{bca} + v_{abc} \\
+v_{abc} + v_{acb} + v_{cab} >& v_{cab} + v_{cba} + v_{bca}. 
+\end{align}
+The first pair of conditions handles the case where $a$ is the Condorcet winner. The second set of conditions handles the case where there is a forward cycle ($a$ beats $b$, $b$ beats $c$, $c$ beats $a$) and $a$'s loss to $c$ is better than $b$'s loss to $a$ and $c$'s loss to $b$. The third set of conditions handles the case where there is a reverse cycle ($a$ loses to $b$, $b$ loses to $c$, $c$ loses to $a$) and $a$'s loss to $b$ is better than $b$'s loss to $c$ and $c$'s loss to $a$.
+
+
+
+
+
+## Pivot events as altered win conditions
+
+<!-- Generally, a locus is a set of points satisfying a set of conditions.  -->
+In any neutral and anonymous voting system, every pivot event can be represented as an alteration of the win conditions in which one condition is set to equality. The type of alteration that is necessary depends on the voting system. 
+
+<!-- In plurality and other positional methods (including Borda count), all pivot events can be represented by converting one of the win conditions into an equality. In elimination systems like IRV and Condorcet systems, we need to add further conditions.    -->
+
+<!-- In IRV and other elimination systems, for some pivot events we need to add one or more conditions indicating what would happen if the putative winning candidate were eliminated. In Condorcet systems we also need to specify   -->
+
+In any positional method (including plurality) we can estimate the probability of pivot event $ab$, where a single vote could change the winner from $a$ to $b$ (or vice versa), by integrating $f(\mathbf{v})$ over the set of points where 
+<!-- one pivot event in plurality is a near-tie between $a$ and $b$ such that a single vote could change the winner from $b$ to $a$ or vice versa. This pivot event can be represented by  -->
+\begin{align}
+s_a =& s_b  \\
+s_a >& s_j \, \forall \, j \neq a, b
+\end{align}
+and dividing by $n$, the size of the electorate. 
+
+In an IRV election there are two types of pivot events. In one type, which Eggers and Nowacki refer to as "second-round pivot events", the final count (after all other candidates have been eliminated) is a near tie, such that a single ballot could change the winner. Given three candidates ($a$ $b$ and $c$), the probability of second-round pivot event $ab2$ can be estimated by integrating $f(\mathbf{v})$ over the set of points where
+\begin{align}
+v_{abc} + v_{acb} >&  v_{cab} + v_{cba} \\ 
+v_{bac} + v_{bca} >&  v_{cab} + v_{cba}  \\ 
+v_{abc} + v_{acb} + v_{cab} =&  v_{bac} + v_{bca} + v_{cba}
+\end{align}
+and dividing by $n$, the size of the electorate. 
+
+The other type of IRV pivot event takes place in an earlier round of counting: two candidates are nearly tied for last place in a given round, such that one vote could determine which one advances, and the identity of the winner depends on which candidate advances. In a three-candidate election, there are three pivot events involving a near-tie for last between $a$ and $b$ in the first round of counting. At pivot event $ab.ab$, $a$ would win if $a$ advanced while $b$ would win if $b$ advanced. We can estimate this pivot probability by integrating $f(\mathbf{v})$ over the set of points where 
+\begin{align}
+v_{abc} + v_{acb} =&  v_{bac} + v_{bca} \\ 
+v_{cab} + v_{cba} >&  v_{abc} + v_{acb}  \\ 
+v_{abc} + v_{acb} + v_{bac} >&  v_{cab} + v_{cba} + v_{bca} \\ 
+v_{bac} + v_{bca} + v_{abc} >&  v_{cab} + v_{cba} + v_{acb}  
+\end{align}
+and dividing by $n$. At pivot event $ab.ac$, $a$ would win if $a$ advanced while $c$ would win if $b$ advanced; at pivot event $ab.cb$, $c$ would win if $a$ advanced while $b$ would win if $b$ advanced. We can obtain the locus for the first of these pivot events by reversing the last inequality in the above set of conditions and we can obtain the locus for the second of these pivot events by reversng the third inequality in the above set of conditions. 
+
+Finally,  consider a three-candidate election using the Kemeny method:  in which the winner is 
+
+
+
