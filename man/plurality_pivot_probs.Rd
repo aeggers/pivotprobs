@@ -11,19 +11,20 @@ plurality_pivot_probs(method = "eggers-vivyan", ...)
 \itemize{
 \item \code{"eggers-vivyan"}, which is based on the Dirichlet
 distribution but makes an independence assumption for efficiency -- in brief, it assumes that the probability of $a$ and $b$ tying for first at vote share $x$ is equal to the probability of $a$ and $b$ receiving $x$ times the probability of $c$ receiving no more than $x$ times the probability of $d$ receiving no more than $x$ times the probability of $e$ receiving no more than $x$, etc. (In reality, these events are not independent.)
-\item \code{"myatt-fisher"}, which computes the exact (but not normalized) pivot probabilities assuming a Dirichlet distribution and only for the three-candidate case.
-\item \code{"simplicial-cubature"}, which uses an adaptive algorithm to integrate the distribution of election results (either Dirichlet or multivariate normal) over the relevant simplices in $\mathbb{R}^k$.
-\item \code{"simulation"}, which takes a matrix of simulated election results, or arguments to generate such a matrix from a Dirichlet or multivariate normal distribution, and computes pivot probabilities.
-\item \code{"grid-based"}, which constructs a grid of points and computes pivot probabilities using either Dirichlet or multivariate normal parameters.
+\item \code{"myatt-fisher"}, which computes exact (but not normalized) pivot probabilities for the three-candidate case assuming a Dirichlet distribution over election outcomes.
+\item \code{"simplicial-cubature"}, which uses an adaptive algorithm to integrate the distribution of election results (either Dirichlet or logistic normal) over the relevant simplices.
+\item \code{"simulation"}, which takes a matrix of simulated election results from any distribution, or arguments to generate such a matrix from a Dirichlet or logistic normal distribution, and computes pivot probabilities.
+\item \code{"grid-based"}, which constructs a grid of points and computes pivot probabilities using either Dirichlet or logistic normal parameters.
 }}
 
 \item{...}{Other arguments including
 \itemize{
+\item \code{distribution}, either "dirichlet" or "logisticnormal", relevant unless \code{method = "simulation"} and user passes \code{sims}; if \code{distribution} is not supplied, code tries to infer \code{distribution} from parameters passed (\code{alpha} implies "dirichlet", \code{sigma} implies "logisticnormal"),
 \item \code{alpha}, a$k$-length vector of parameters for the Dirichlet
  distribution,
- \item \code{mu}, a $k$-length vector of expected vote shares for the Dirichlet distribution or multivariate normal distribution,
- \item \code{sigma}, a $k$-by-$k$ matrix of variances and covariances for the multivariate normal distribution,
- \item \code{sims} to be used if \code{method = "simulation"},
+ \item \code{mu}, a $k$-length vector of expected vote shares for the Dirichlet distribution or a $k-1$ length vector of means for thre logistic normal distribution,
+ \item \code{sigma}, a $k-1$-by-$k-1$ matrix of variances and covariances for the logistic normal distribution,
+ \item \code{sims} to be used if \code{method = "simulation"} (not required if you pass parameters for the simulations to be generated from a Dirichlet or logistic normal distribution),
  \item \code{n} the number of simulations, if \code{method = "simulation"} and not passing \code{sims},
  \item \code{increment}, the space between grid-points if using \code{method = "grid-based"}
  }}

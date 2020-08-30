@@ -8,7 +8,10 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
+library(patchwork)
+devtools::load_all(".")
 ```
+
 
 ## Plurality pivot events 
 
@@ -116,6 +119,58 @@ The main advantage of the Monte Carlo approach is its flexibility: we can apply 
 
 <!-- depend on whether we an unlikely pivot event is estimated to have probability  -->
 
+#### Grid-based approach 
+
+An alternative way to estimate $n \pi_{12}$ is to lay out a regular grid of points on the locus where 1 and 2 tie for first, evaluate $f(\mathbf{v})$ at each point in the grid, sum the values, and multiply by the area or volume surrounding each grid point. 
+
+A simple way to implement this approach is to create a regular grid covering the entire unit simplex ($x_1, x_2, \ldots, x_k$ such that $0 \leq x_i \leq 1 \, \forall i$ and $\sum_i x_i = 1$) and then extract the grid points where $x_1 = x_2$ and $x_2 > x_i \, \forall \, i > 2$. 
+
+Below I show grid points for the 3-candidate and 4-candidate cases, with the points highlighted to indicate the density. 
+
+```{r show_grid_approach}
+# show it for 3 and 4 side-by-side
+ptg3 <- plurality_tie_grid(k = 3, increment = .01)
+
+alpha <- c(10, 8, 3)
+
+as_tibble(ptg3) %>% 
+    mutate(x = V0 + .5*V1,
+         y = sqrt(3/4)*V1,
+         dens = gtools::ddirichlet(ptg3, alpha = alpha)) %>% 
+  ggplot(aes(x = x, y = y)) +
+  geom_point(aes(col = dens), size = 1, show.legend = F) + 
+  coord_fixed() + 
+  theme_void() + 
+  expand_limits(x = c(-.1, 1.1), y = sqrt(3/4)*c(-.1, 1.1)) + 
+  annotate(geom = "text", x = c(1,.5,0), y = c(0,sqrt(3/4),0) + .05*c(-1,1,-1), label = c("a", "b", "c")) + 
+  votevizr::geom_ternary_boundary() 
+
+# for the other one I think I need rgl or plotly.
+# this is not quite working. 
+
+library(plotly)
+
+ptg4 <- plurality_tie_grid(k = 4)
+
+alpha4 <- c(10, 8, 5, 3)
+
+as_tibble(ptg4) %>% 
+    mutate(x = V0 + .5*V1,
+         y = sqrt(3/4)*V1,
+         z = sqrt(3/4)*last,
+         dens = gtools::ddirichlet(ptg4, alpha = alpha4),
+         text = paste("x = ", V0, sep = "")) %>%
+  plot_ly(x = ~x, y = ~y, z = ~z, color = ~dens, hoverinfo = "text") %>% 
+  layout(xaxis = list(showticklabels = F), yaxis = list(showticklabels = F), zaxis = list(showticklabels = F)) 
+
+
+```
+
+#### Simplicial Cubature 
+
+The simplicial cubature approach extends and improves on the grid-based approach. 
+
+
 #### Eggers-Vivyan
 
 Eggers \& Vivyan introduced an approach for efficiently approximating pivot probabilities for $K$-candidate plurality elections using an independence assumption. Specifically, let $f_{V_1, V_2}(v_1, v_2)$ denote the marginal density of candidate 1's and 2's vote shares and let $f_{V_j \mid V_1, V_2}(v_j \mid v_1, v_2)$ denote the marginal density of candidate $j$'s vote share conditional on candidate 1's and 2's vote shares. Then we might approximate $n \pi_{12}$ as 
@@ -152,10 +207,6 @@ Good for generality, precision.
 
 Here we will test the `plurality_pivot_probs()` function.  We can show the usage for some cases and then do a time-consuming comparison test. 
 
-```{r load_all, message = F}
-devtools::load_all(".")
-library(tidyverse)
-```
 
 ## Three candidates
 
@@ -367,6 +418,7 @@ tibble(`Pivot event` = c("ab", "ac", "ad", "bc", "bd", "cd"),
 
 Other things still to do: 
 
+- write up grid and SC approaches -- can visualize a nice picture, but how to make? 
 - more grid points by default 
 - increments for Eggers & Vivyan 
 - higher maxEvals by default

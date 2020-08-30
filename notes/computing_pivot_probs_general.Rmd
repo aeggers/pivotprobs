@@ -11,6 +11,67 @@ library(tidyverse)
 ```
 
 
+## Overall motivation and plan 
+
+Define pivot events and show how to calculate them in a general way, not limited to one voting system. 
+
+## Pivot events and pivot probabilities 
+
+Consider an election involving $K$ candidates. Let $\mathcal{B}$ denote the set of admissible ballots, with $x$ referring to one of those ballots. The voting system is anonymous (i.e. it treats each voter's ballot equally), so an election outcome can be represented as a vector $\mathbf{v}$ of ballot shares, with element $v_x$ denoting the share of voters submitting ballot $x$; $\mathbf{v}$ lives on the $|\mathcal{B}|$-dimensional unit simplex $\mathbb{S}^{|\mathcal{B}|}$, with $v_x \in [0,1]$ for all ballots and $\sum \mathbf{v} = 1$.
+
+Pivot events are subsets of election results where a single ballot can affect the outcome; a specific pivot event is the subset of election results where a single ballot can affect the outcome in a distinct way. More formally, let $w(x \mid \mathbf{v})$ be a function indicating which candidate wins at a given outcome $\mathbf{v}$ when an additional ballot $x$ is submitted. Pivot events are election outcomes where $w(x \mid \mathbf{v})$ is non-degenerate, i.e. its output depends on $x$. A specific pivot event is the subset of election outcomes with a common distinct mapping $w(x \mid \mathbf{v})$. 
+
+<!-- Suppose, for example, there are three candidates $A$, $B$, and $C$; voters can submit ballots $a$, $b$, or $c$; and $\mathbf{v}$ is such that $A$ wins unless an additional ballot $b$ is submitted, in which case $b$ wins. Then $w(x \mid \mathbf{v})$ is  -->
+<!-- \begin{align} -->
+<!-- a \rightarrow& A \\ -->
+<!-- b \rightarrow& B \\ -->
+<!-- c \rightarrow& A \\ -->
+<!-- \end{align} -->
+<!-- We can partition $\mathbb{S}^{|\mathcal{B}|}$ such that each subset has a single unique mapping $w(x \mid \mathbf{v})$. Each subset in which $w(x \mid \mathbf{v})$ is non-degenerate is a distinct *pivot event*.   -->
+
+The probability of a pivot event occurring is referred to as the *pivot probability*. Suppose an election outcome $\mathbf{v}$ is the realization of a random variable $\mathbf{V}$ with associated distribution function $f_{\mathbf{V}}(\mathbf{v})$.  
+Then if $E$ is the pivot event of interest, 
+<!-- and $f(\matbf{v})$ denotes the distribution over election outcomes,  -->
+the pivot probability can be written  
+\[
+\int_{E} f(\mathbf{v}) \, d\mathbf{v}.
+\]
+
+In what follows we will assume that $\mathbf{V}$ is a continuous random variable, so that $f_{\mathbf{V}}(\mathbf{v})$ is a probability density function. Assuming $\mathbf{V}$ is continuous rather than discrete means that exact ties do not occur, which simplifies notation. It also allows us to do integration XXX. Also I think it means we can focus on binary relations?  
+<!-- It also allows us to use parametric functions  approximate pivot probabilities with  -->
+<!-- More importantly, it means that the calculation of pivot probabilities is a problem of integration rather than combinatorics. -->
+
+In commonly used voting systems, pivot events are "nearly hyperplanes" -- that is, they  
+
+I thought I had an algorithm for discovering all of the pivot probabilities. Start with the win conditions for an arbitrary candidate $a$ for the given voting system; in general, the winning conditions for a candidate in a voting system will be the union of one or more sets of inequalities on the vote shares, with each inequality pertaining to the comparison of a pair of candidates. For each set of inequalities, and each inequality comparing $a$ and $b$, narrowly reverse the $a$ and $b$ comparison. If some other specific candidate is the winner given $a$'s other win conditions, you have identified conditions for a pivot event. If $a$ remains the winner given $a$'s other win conditions, this is not a pivot event. If instead the identity of the winner depends on further conditions (i.e. conditions not part of $a$'s win conditions), then enumerate the possible conditions; each set of conditions (win conditions plus any extra conditions) that produce a winner other than $a$ corresponds to a pivot event. Having enumerated the conditions for pivot events involving a reversal of $a$ and $b$, you can re-index the candidates to get all pivot events. 
+
+I thought this algorithm would not uncover pivot event $ab.cb$ in IRV. The win conditions for $a$ are $v_a > v_c$, $v_b > v_c$, $v_a + v_{ca} > v_b + v_{cb}$ and $v_a > v_b$, $v_c > v_b$, $v_a + v_{ba} > v_c + v_{bc}$. For the first set we narrowly reverse the second-round condition (because that's the one involving $b$) and get $ab2$.  For the second set we narrowly reverse the first-round condition $v_a > v_b$, in which case $a$ is eliminated but the winner is ambiguous. The possibilities are $v_b + v_{ab} > v_c + v_{ac}$, in which case $b$ wins and we have $ab.ab$, or $v_b + v_{ab} < v_c + v_{ac}$, in which case $c$ wins and we have $ab.ac$. But because we start from a candidate's win conditions we wouldn't get $ab.cb$. It seems that the rule "start from win conditions and reverse the $a$-$b$ condition" doesn't produce all pivot events. 
+
+What about doing further reversals? If we narrowly reverse $v_c > v_b$, then again the winner is ambiguous. The possibilities are $v_a + v_{ca} > v_b + v_{cb}$, in which case the winner remains $a$ and it's not a pivot event, or $v_a + v_{ca} < v_b + v_{cb}$, in which case the winner is $b$ and it's pivot event $bc.ac$. So by including this reversal, we get $ab2$, $ab.ab$, $ab.ac$, and $bc.ac$ from $a$'s win conditions. And presumably applying the same rule to other pairs we would get $ab.cb$ from another pair. But what is the rule really? If we're not just reversing rules involving $a$ and $b$, then from $a$'s win conditions we would also get $ac2$ (second set), $ac.ac$, $ac.ab$, and $bc.ba$. So I think we have an algorithm that is overbroad, i.e. it gets the same pivot event more than once. 
+
+
+
+defined by a system of inequalities and one near-equality, where the near-equality ensures that one ballot could change the outcome. For example, in a plurality contest where $v_i$ is candidate $i$'s vote share, the pivot event where a single ballot could elect $b$ instead of $a$ satisfies the conditions $v_a > v_i \, \forall \, i$ and $v_a - v_b < \frac{1}{n}$, where $n$ is the size of the electorate. (In words, a single ballot could change the winner from $a$ to $b$ if $a$ is leading but $b$ is less than vote vote behind.)  Thus (as noted by Hoffman 1983) pivot events tend to be "thin". This allows 
+
+We can therefore approximate 
+
+
+## Pivot probabilities
+
+
+<!-- integrating a continuous function rather than a combinatorial problem.    -->
+
+
+Let $E$ denote a pivot event of interest. 
+
+In practice, the conditions for a pivot event include a set of inequalities and one near-equality. For example, in a plurality contest where $v_i$ is candidate $i$'s vote share, the pivot event where a single ballot could elect $b$ instead of $a$ satisfies the conditions $v_a > v_i \, \forall \, i$ and $v_a - v_b < \frac{1}{n}$. Let $\mathcal{L}_e$ denote the locus of points where these inequalities are satisfied and the near-equality is satisfied with equality. Then we can approximate the pivot probability as 
+\[
+\frac{1}{n} \int_{E} f(\mathbf{v}) \, d\mathbf{v}.
+\]
+
+
+
+
 ## Motivation: pivot events and pivot probabilities
 
 Pivot events are election outcomes in which a single vote can change the election outcome. A pivot probability is the probability of a given pivot event occuring. Computing pivot probabilities is important for determining the optimal (strategic) vote, for computing how much a voter gains by voting strategically rather than sincerely, and for assessing a voting system's susceptibility to strategic voting.
@@ -75,9 +136,7 @@ The first pair of conditions handles the case where $a$ is the Condorcet winner.
 
 
 
-
-
-## Pivot events as altered win conditions
+## Defining pivot events by setting a win condition to equality
 
 <!-- Generally, a locus is a set of points satisfying a set of conditions.  -->
 In any neutral and anonymous voting system, every pivot event can be represented as an alteration of the win conditions in which one condition is set to equality. The type of alteration that is necessary depends on the voting system. 
@@ -100,18 +159,53 @@ v_{abc} + v_{acb} >&  v_{cab} + v_{cba} \\
 v_{bac} + v_{bca} >&  v_{cab} + v_{cba}  \\ 
 v_{abc} + v_{acb} + v_{cab} =&  v_{bac} + v_{bca} + v_{cba}
 \end{align}
-and dividing by $n$, the size of the electorate. 
+and dividing by $n$. 
 
-The other type of IRV pivot event takes place in an earlier round of counting: two candidates are nearly tied for last place in a given round, such that one vote could determine which one advances, and the identity of the winner depends on which candidate advances. In a three-candidate election, there are three pivot events involving a near-tie for last between $a$ and $b$ in the first round of counting. At pivot event $ab.ab$, $a$ would win if $a$ advanced while $b$ would win if $b$ advanced. We can estimate this pivot probability by integrating $f(\mathbf{v})$ over the set of points where 
+The other type of IRV pivot event takes place before the final round of counting: two candidates are nearly tied for last place in a given round, such that one vote could determine which one advances and thereby determine who wins the election. In a three-candidate election, there are three such pivot events involving each pair of candidates. At one pivot event (which Eggers & Nowacki call $ab.ab$), $a$ and $b$ are tied for last in first-place votes, and $a$ would win if $a$ advanced while $b$ would win if $b$ advanced. We can estimate this pivot probability by integrating $f(\mathbf{v})$ over the set of points where 
 \begin{align}
 v_{abc} + v_{acb} =&  v_{bac} + v_{bca} \\ 
 v_{cab} + v_{cba} >&  v_{abc} + v_{acb}  \\ 
 v_{abc} + v_{acb} + v_{bac} >&  v_{cab} + v_{cba} + v_{bca} \\ 
 v_{bac} + v_{bca} + v_{abc} >&  v_{cab} + v_{cba} + v_{acb}  
 \end{align}
-and dividing by $n$. At pivot event $ab.ac$, $a$ would win if $a$ advanced while $c$ would win if $b$ advanced; at pivot event $ab.cb$, $c$ would win if $a$ advanced while $b$ would win if $b$ advanced. We can obtain the locus for the first of these pivot events by reversing the last inequality in the above set of conditions and we can obtain the locus for the second of these pivot events by reversng the third inequality in the above set of conditions. 
+and dividing by $n$. The other two closely related pivot events are $ab.ac$, where $a$ would win if $a$ advanced while $c$ would win if $b$ advanced, and $ab.cb$, where $c$ would win if $a$ advanced while $b$ would win if $b$ advanced. We can obtain the locus for the first of these pivot events by reversing the last inequality in the above set of conditions and we can obtain the locus for the second of these pivot events by reversing the third inequality in the above set of conditions. 
 
-Finally,  consider a three-candidate election using the Kemeny method:  in which the winner is 
+Finally, consider a three-candidate election using the Kemeny method. There are two types of pivot events for each pair of candidates. In one type, the pairwise comparison of $a$ and $b$ is a near tie, while both candidates defeat each of the remaining candidates in pairwise comparisons. In the three-candidate case the corresponding locus is defined by 
+\begin{align}
+v_{abc} + v_{acb} + v_{cab} =&  v_{bac} + v_{bca} + v_{cba} \\ 
+v_{abc} + v_{acb} + v_{bac} >&  v_{cab} + v_{cba} + v_{bca} \\ 
+v_{bac} + v_{bca} + v_{abc} >&  v_{cab} + v_{cba} + v_{acb}.
+\end{align}
+In the other type, there is a Condorcet cycle in which $a$ and $b$ lose by nearly equal margins (and by less than other candidates involved in the cycle). 
+The forward cycle occurs where 
+\begin{align}
+v_{abc} + v_{acb} + v_{cab} >& v_{bac} + v_{bca} + v_{cba}  \\ 
+v_{bac} + v_{bca} + v_{abc} >& v_{cab} + v_{cba} + v_{acb}  \\ 
+v_{cab} + v_{cba} + v_{bca} >& v_{abc} + v_{acb} + v_{bac}
+\end{align}
+in which case a decisive $a$-$b$ tie occurs where  
+\begin{align}
+v_{abc} + v_{acb} + v_{bac} =& v_{bac} + v_{bca} + v_{cba} \\
+v_{abc} + v_{acb} + v_{bac} >& v_{cab} + v_{cba} + v_{acb},  \\ 
+\end{align}
+while the reverse cycle appears where 
+\begin{align}
+v_{abc} + v_{acb} + v_{cab} <&  v_{bac} + v_{bca} + v_{cba}  \\ 
+v_{bac} + v_{bca} + v_{abc} <& v_{cab} + v_{cba} + v_{acb} \\ 
+v_{cab} + v_{cba} + v_{bca} <& v_{abc} + v_{acb} + v_{bac} 
+\end{align}
+in which case a decisive $a$-$b$ tie occurs where 
+\begin{align}
+v_{abc} + v_{acb} + v_{cab} =& v_{bac} + v_{bca} + v_{abc} \\
+v_{abc} + v_{acb} + v_{cab} >& v_{cab} + v_{cba} + v_{bca}. 
+\end{align}
+
+## Some doubts at this point 
+
+I was interested in the idea that you can do a minimal tweak to winning conditions and get the pivot probabilities. Reverse one inequality and change the winner? In positional methods this works because  This is true of positional methods. It is not true of 
+
+## Estimating pivot probabilities 
+
 
 
 

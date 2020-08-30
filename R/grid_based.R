@@ -39,7 +39,8 @@ grid_based_plurality_pivot_probs <- function(increment = .01, alpha = NULL, mu =
   out
 }
 
-plurality_tie_grid <- function(increment = .025, k = 4){
+#' @export
+plurality_tie_grid <- function(k = 4, increment = .025){
   # this one is base R
   stopifnot(k >= 3)
   # beware using a small increment and high k because that will take a long time.
