@@ -28,7 +28,7 @@ vertices_of_integration_region_from_inequalities <- function(inequality_mat){
   # adjust a_mat and b_vec for any near inequalities we are making
   # the \geq statement should be zero
 
-  # makeH represents the polyhedron described by the inequalities and the simplex conditions
+  # makeH represents the polyhedron described by the inequalities and the simplex conditions. it is just a reformatting of the conditions you put in -- no computation.
   # a1 and b1 describe \leq inequalities, so I make LHS and RHS of my \geq inequalities (a_mat and b_vec) negative.
   # a2 and b2 describe an exact equality - here, just keeping everything on the simplex
   the_Hrep <- rcdd::makeH(a1 = -rbind(a_mat, positivity_part), b1 = c(-b_vec, rep(0, nrow(positivity_part))), a2 = matrix(1, ncol = ncol(a_mat), nrow = 1), b2 = 1)
@@ -80,22 +80,26 @@ S_array_from_inequalities <- function(inequality_mat){
 
 }
 
-k <- 4
-n <- 5000
-# plurality outright win conditions: v_a - v_k > 1/n forall k
-im <- plurality_inequality_matrix(4, n = n)
+test <- F
+if(test){
+  k <- 4
+  n <- 5000
+  # plurality outright win conditions: v_a - v_k > 1/n forall k
+  im <- plurality_inequality_matrix(4, n = n)
 
-voir_a <- vertices_of_integration_region_from_inequalities(im)
-S_a <- S_array_from_inequalities(im)
-S_ab <- S_array_from_inequalities(im %>% make_inequalities_into_near_equalities(1))
+  voir_a <- vertices_of_integration_region_from_inequalities(im)
+  S_a <- S_array_from_inequalities(im)
+  S_ab <- S_array_from_inequalities(im %>% make_inequalities_into_near_equalities(1))
 
-voir_abc <- vertices_of_integration_region_from_inequalities(im %>% make_inequalities_into_near_equalities(c(1,2)))
+  voir_abc <- vertices_of_integration_region_from_inequalities(im %>% make_inequalities_into_near_equalities(c(1,2)))
 
-im_abc <- im %>% make_inequalities_into_near_equalities(c(1,2), n = 6000)
-voir_abc <- vertices_of_integration_region_from_inequalities(im_abc)
-S_abc <- S_array_from_inequalities(im_abc)
-out <- SimplicialCubature::adaptIntegrateSimplex(dirichlet_for_integration, S = S_abc, alpha = c(10, 8, 4, 3), maxEvals = 100000)
-out$integral
+  im_abc <- im %>% make_inequalities_into_near_equalities(c(1,2), n = 6000)
+  voir_abc <- vertices_of_integration_region_from_inequalities(im_abc)
+  S_abc <- S_array_from_inequalities(im_abc)
+  out <- SimplicialCubature::adaptIntegrateSimplex(dirichlet_for_integration, S = S_abc, alpha = c(10, 8, 4, 3), maxEvals = 100000)
+  out$integral
+}
+
 
 # so now I need to cycle through. for plurality (or any positional method)
 # each combination of conditions made into a near equality is a pivot event.
@@ -104,11 +108,11 @@ out$integral
 
 # all I need is this: how do I get a list of all combinations of indices
 # c(), c(1), c(2), c(3), ..., c(1,2), c(1,2,3)
-k <- 4
-combn(k, 0)
-combn(k, 1)
-combn(k, 2)
-combn(k, 3)
+# k <- 4
+# combn(k, 0)
+# combn(k, 1)
+# combn(k, 2)
+# combn(k, 3)
 
 
 exact_plurality_pivot_probabilities <- function(n = 5000, alpha = NULL, mu = NULL, sigma = NULL, precision = NULL, cand_names = NULL, sep = "", ...){
@@ -183,18 +187,22 @@ P_mat_from_eppp <- function(out){
     #     W = out %>% map("W_mat")) -> tpW
 }
 
-# to test: dirichlet case
-out <- exact_plurality_pivot_probabilities(alpha = c(10, 9, 6, 5), tol = .001, maxEvals = 100000)
-P <- P_mat_from_eppp(out)
+test <- F
+if(test){
+  out <- exact_plurality_pivot_probabilities(alpha = c(10, 9, 6, 5), tol = .001, maxEvals = 100000)
+  P <- P_mat_from_eppp(out)
 
-# logistic normal case -- takes a bit longer?
-this_sigma <- diag(4)*c(.5, .25, .1, 0)
-out_ln <- exact_plurality_pivot_probabilities(mu = c(1,.5, .25, 0), sigma = this_sigma, tol = .001, maxEvals = 100000)
-P <- P_mat_from_eppp(out_ln)
+  # logistic normal case -- takes a bit longer?
+  this_sigma <- diag(4)*c(.5, .25, .1, 0)
+  out_ln <- exact_plurality_pivot_probabilities(mu = c(1,.5, .25, 0), sigma = this_sigma, tol = .001, maxEvals = 100000)
+  P <- P_mat_from_eppp(out_ln)
 
 
-out <- exact_plurality_pivot_probabilities(alpha = c(10, 9, 6), tol = .001, maxEvals = 100000)
-P <- P_mat_from_eppp(out)
+  out <- exact_plurality_pivot_probabilities(alpha = c(10, 9, 6), tol = .001, maxEvals = 100000)
+  P <- P_mat_from_eppp(out)
+
+}
+
 
 
 # OK that's cool!

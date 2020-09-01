@@ -45,7 +45,9 @@ $\arg\max_j \overline{u}_j$, i.e. choosing the ballot that maximizes expected ut
 
 Computationally (and perhaps conceptually) it is easier to approach the strategic voting problem by partitioning the sample space of election outcomes (the $B$-dimensional unit simplex) into *election events* where the effect of a single ballot is homogeneous:
 
-**Definition** Two election outcomes $\mathbf{v}'$ and $\mathbf{v}'$ are part of the same election event $E$ if and only if $p_{i,j}(\mathbf{v'}) = p_{i,j}(\mathbf{v''}) = p_{i,j}(E) \, \forall \, i,j$. 
+**Definition** Two election outcomes $\mathbf{v}'$ and $\mathbf{v}'$ are part of the same election event $E$ if[^ifandonlyif] $p_{i,j}(\mathbf{v'}) = p_{i,j}(\mathbf{v''}) = p_{i,j}(E) \, \forall \, i,j$.
+
+[^ifandonlyif]: We could say "if and only if", but there are times when it may be convenient to distinguish between subsets of election outcomes with the same event-specific probability matrix, e.g. because there are multiple ways for a candidate to win, with the union of the corresponding spaces not being convex.  
 
 
 <!-- Letting $\mathcal{E}$ denote the set of election events, we can rewrite the voter's problem as  -->
@@ -71,18 +73,63 @@ Now, organize the $p_{i,j}(E)$'s for each event $E$ and each candidate $i$ and b
 <!--   p_{K,1}(\mathbf{v}) & p_{K,2}(\mathbf{v}) & \cdots & p_{K,B}(\mathbf{v})  -->
 <!--  \end{pmatrix}. -->
 <!-- \] -->
-Next, combine the event-specific election probability matrices to create the *election probability matrix* $\mathbf{P}$  
+Then we can combine the event-specific election probability matrices to create the *election probability matrix* $\mathbf{P}$  
 \[\mathbf{P} = \sum_{E \in \mathcal{E}} \pi_E \mathbf{P}(E), \]
 where $\pi_{E} = \int_{E} f(\mathbf{v}) \, d \mathbf{v}$ is the probability of event $E$ according to beliefs $f(\mathbf{v})$. 
 (Representative element $p_{i,j}$ in $\mathbf{P}$ indicates the probability of the $i$th candidate winning if the voter submits the $j$th ballot.) Then the vector $\mathbf{\overline{u}} = \mathbf{u} \mathbf{P} = (\overline{u}_1, \overline{u}_2, \ldots, \overline{u}_B)$ gives the voter's expected utility from submitting each possible ballot. Thus determining the optimal ballot given beliefs and preferences reduces to the problem of computing $\mathbf{P}$, which in turn reduces to the problem of enumerating election events (i.e. election results where the effect of a single ballot on the winner is homogeneous) and computing their probability. 
 
-Generally, there are two types of election events: at *pivot events* the winner depends on the voter's ballot; at *non-pivot events* it does not.  
+### Enumerating election events 
+
+Constructing the $\mathbf{P}$ matrix requires first partitioning the set of possible results into election events, i.e. sets of election results where an additional ballot has a homogenous effect on the outcome. How do we identify the relevant election events in a given voting system?  
+
+Plurality elections are the most straightforward case. Given three candidates $a$, $b$, and $c$, and focusing on election outcomes where candidate $a$ has the highest vote share,[^no_ties] there are four election events depending on whether $a$'s lead over $b$ is more or less than $\frac{1}{n}$ and whether $a$'s lead over $c$ is more or less than $\frac{1}{n}$. The table below shows the conditions. At event $a$ candidate $a$ wins regardless of an additional ballot; at event $ab$ candidate $a$ wins unless $b$ gains an additional ballot, in which case $b$ wins; at event $ac$ candidate $a$ wins unless $c$ gains an additional ballot, in which case $c$ wins; at event $abc$ either $b$ or $c$ can win by gaining an additional ballot. 
+
+\begin{tabular}{cc}
+Election event & Conditions \\
+$a$ & $v_a - v_b > \frac{1}{n}$,  $v_a - v_c > \frac{1}{n}$, $v_i \in [0,1] \, \forall \, i$, $\sum_i v_i = 1$ \\ 
+$ab$ & $v_a - v_b > 0$, $v_a - v_b < \frac{1}{n}$, $v_a - v_c > \frac{1}{n}$, $v_i \in [0,1] \, \forall \, i$, $\sum_i v_i = 1$ \\
+$ac$ & $v_a - v_b > \frac{1}{n}$, $v_a - v_c > 0$,  $v_a - v_c < \frac{1}{n}$, $v_i \in [0,1] \, \forall \, i$, $\sum_i v_i = 1$ \\
+$abc$ & $v_a - v_b > 0$, $v_a - v_b < \frac{1}{n}$, $v_a - v_c > 0$,  $v_a - v_c < \frac{1}{n}$, $v_i \in [0,1] \, \forall \, i$, $\sum_i v_i = 1$ \\
+\end{tabular} 
+
+<!-- If no to both, a single voter cannot affect the outcome; if yes to both, a single ballot could change the winner from $a$ to either $b$ or $c$.  -->
+
+In total (i.e. including cases where $b$ or $c$ is in the lead), there are twelve election events --- one non-pivot event for each candidate (e.g. where $a$ wins by more than one vote), two near-ties for for each pair of candidates (e.g. where $a$ is just ahead of $b$ and one where $b$ is just ahead of $a$), and three three-way near-ties (e.g. where $a$ is just ahead of both $b$ and $c$). More generally, there are $K \sum_{m=0}^{K-1} \binom{K-1}{m}$ distinct election events in a $K$-candidate plurality contest, each with a unique mapping from a single ballot to the outcome.  
+
+<!-- XXX TODO: Show election events in table  -->
+
+[^no_ties]: Recall that, because $\mathbf{v}$ is continuous, there is always a candidate with the highest vote share. 
+
+In other positional methods such as Borda count the enumeration of election events is more complex. As in plurality, the winner depends on which candidate has the highest score, but now lower rankings may count as well, to differing degrees depending on the rules.[^antiplurality] This means that in principle we need to distinguish more finely among near-ties: for example, we want to distinguish between cases where the winner would change from $a$ to $b$ if the voter ranked $b$ *one* place above $a$ from cases where the winner would change from $a$ to $b$ if the voter ranked $b$ *two* places above $a$. To anticipate the direction we will take below, in such cases the analysis becomes simpler if we assume that e.g. the probability of $b$ finishing with a score no more than $\varepsilon$ below $a$ is twice the probability of $b$ finishing with a score no more than $\varepsilon/2$ below $a$.   
+
+[^antiplurality]: In anti-plurality all rankings count for 1 except for the lowest ranking. Analysis is thus the exact reverse of plurality, where the winner is the candidate with the fewest lowest rankings.  
+
+In other methods such as instant-runoff voting and Kemeny-Young (a Condorcet method), a reasonable strategy for enumerating the relevant election events is to begin with the conditions under which a candidate wins and begin reversing inequalities to discover ways in which a winner may become a loser.  
 
 
+### Computing nearly-exact event probabilities 
 
-Ultimately, the voter 
+Given a set of inequalities defining election event $E$ and an arbitrary distribution over election outcomes $f(\mathbf{v})$, we can use tools from computational geometry to compute the event probability $\pi_{E} = \int_E f(\mathbf{v}) \, d \mathbf{v}$ with arbitrary precision.
+
+The first step is to convert the set of inequalities defining $E$ into the vertices of the convex hull of the election event, i.e. the points at the "corners" of the region where the event takes place. (We use the `rcdd::scdd()` function in `R`, which is an implementation of the C library `cddlib`.) Next we apply a Delaunay triangulation to divide the region defined by $E$ into disjoint simplices. For example, if $B=3$ we divide $E$ into triangles; if $B = 4$ we divides $E$ into tetrahedrons. (We use the `geometry::delaunayn()` function in `R`, which interfaces with the Qhull library: TODO cite.)  Finally, we apply an adaptive integration algorithm by Genz and Cools (TODO: cite) which integrates the function on each simplex, efficiently allocating computational power by using a finer mesh on simplices where the integrand is less flat. (We use the `SimplicialCubature` package by John P. Nolan.) 
+
+Pick up here. Example? Table? 
+  
+
+### Approximations for more efficient computation 
+
+#### Adjacent pivot probs equal 
+#### Dropping a dimension
+#### Exploiting features of the Dirichlet
+
+Eggers-Nowacki does all three of above for IRV.
+
+#### Independence assumption 
+
+Eggers-Vivyan does this plus all three above for $K$-candidate plurality.
 
 
+# Rest is previous work.
 
 ## Overall motivation and plan 
 
