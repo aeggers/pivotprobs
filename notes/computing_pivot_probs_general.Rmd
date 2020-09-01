@@ -8,7 +8,80 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
+devtools::load_all(".")
 ```
+
+## Progress notes 
+
+31 August 2020: I can compute essentially exact pivot probs with Simplicial Cubature. No need to go to straight to the approximation. Can I extend the Simplicial Cubature code to get all of the exact pivot probs for any system? I just need all of the conditions. 
+
+Another thought is that it would be good to return $\pi_a$, $\pi_b$ etc because then we could do some study of efficiency. These are separate points: we could do the approximation, or not.
+
+Is invariance to electorate size a good reason not to approximate? 
+
+Also good to make the connection between election probability matrix and pivot probs. Would be cool to just get that. Some simplifications for speed: include $pi_a$ etc or not (i.e. normalize or not); approximate e.g. $ab$ and $ba$ with the one that straddles the two or not. 
+
+Probably need to revisit my SC code to better understand how it works, e.g. to write up.
+
+
+1 September  Finished working this up for plurality and I'm going to rework the motivation and background around the $P$ matrix. 
+
+## General motivation 
+
+Consider a single-winner election involving $K$ candidates at which each voter may submit one of $B$ distinct ballots.[^approval] Let $\mathbf{v}$ denote an election result expressed as a vector $(v_1, v_2, \ldots, v_B)$ where element $v_j \in [0,1]$ indicates the share of all voters submitting the $j$th ballot and $\sum_{j = 1}^B v_j = 1$. 
+
+[^approval]: This general setup encompasses essentially any voting system including approval voting, where one may mark several candidates on a single ballot. 
+
+We consider the vote choice problem from the perspective of a single voter with preferences over candidates represented by VNM utilities $\mathbf{u} = (u_1, u_2, \ldots, u_K)$. The voter's problem is to choose the ballot $j$ that maximizes her expected utility given beliefs $f(\mathbf{v})$ about the election outcome. We will assume that $f(\mathbf{v})$ is a probability density function, i.e. that $\mathbf{v}$ is considered a realization of a continuous random variable on the $B$-dimensional unit simplex $S^B$.[^continuous_fn] Let $p_{i,j}(\mathbf{v})$ denote the probability that candidate $i$ is elected when the voter submits ballot $j$ and the election outcome among other voters is $\mathbf{v}$.[^probabilistic_results] Then the voter's expected utility from casting the $j$th ballot can be written 
+\[ 
+\overline{u}_j = \int_{S^B} f(\mathbf{v}) \sum_{i = 1}^{K} p_{i,j}(\mathbf{v}) u_i \, d \mathbf{v}
+\]
+and the strategic voter's problem is
+$\arg\max_j \overline{u}_j$, i.e. choosing the ballot that maximizes expected utility. 
+
+[^continuous_fn]: Assuming continuous vote shares simplifies notation and allows us to work with more convenient distribution functions.
+
+[^probabilistic_results]: We will focus on systems where the result is deterministic (so that $p_{i,j}(\mathbf{v}) \in \{0,1\}$), but the framework admits probabilistic outcomes (e.g. coin flips to determine the winner).
+
+Computationally (and perhaps conceptually) it is easier to approach the strategic voting problem by partitioning the sample space of election outcomes (the $B$-dimensional unit simplex) into *election events* where the effect of a single ballot is homogeneous:
+
+**Definition** Two election outcomes $\mathbf{v}'$ and $\mathbf{v}'$ are part of the same election event $E$ if and only if $p_{i,j}(\mathbf{v'}) = p_{i,j}(\mathbf{v''}) = p_{i,j}(E) \, \forall \, i,j$. 
+
+
+<!-- Letting $\mathcal{E}$ denote the set of election events, we can rewrite the voter's problem as  -->
+<!-- \[  -->
+<!-- \overline{u}_j = \sum_{E \in \mathcal{E}} \pi_{E} \sum_{i = 1}^{K} p_{i,j}(E) u_i  -->
+<!-- \] -->
+<!-- where $\pi_{E} = \int_{E} f(\mathbf{v}) \, d \mathbf{v}$ is the probability of event $E$.  -->
+
+Now, organize the $p_{i,j}(E)$'s for each event $E$ and each candidate $i$ and ballot $j$ into an *event-specific election probability matrix* $\mathbf{P}(E)$, indicating the probability of each candidate winning as a function of which ballot the voter submits given event $E$ takes place, as follows: 
+\[
+\mathbf{P}(E) = \begin{pmatrix}
+  p_{1,1}(E) & p_{1,2}(E) & \cdots & p_{1,B}(E) \\
+  p_{2,1}(E) & p_{2,2}(E) & \cdots & p_{2,B}(E) \\
+  \vdots  & \vdots  & \ddots & \vdots  \\
+  p_{K,1}(E) & p_{K,2}(E) & \cdots & p_{K,B}(E) 
+ \end{pmatrix}.
+\]
+<!-- \[ -->
+<!-- \mathbf{P}(\mathbf{v}) = \begin{pmatrix} -->
+<!--   p_{1,1}(\mathbf{v}) & p_{1,2}(\mathbf{v}) & \cdots & p_{1,B}(\mathbf{v}) \\ -->
+<!--   p_{2,1}(\mathbf{v}) & p_{2,2}(\mathbf{v}) & \cdots & p_{2,B}(\mathbf{v}) \\ -->
+<!--   \vdots  & \vdots  & \ddots & \vdots  \\ -->
+<!--   p_{K,1}(\mathbf{v}) & p_{K,2}(\mathbf{v}) & \cdots & p_{K,B}(\mathbf{v})  -->
+<!--  \end{pmatrix}. -->
+<!-- \] -->
+Next, combine the event-specific election probability matrices to create the *election probability matrix* $\mathbf{P}$  
+\[\mathbf{P} = \sum_{E \in \mathcal{E}} \pi_E \mathbf{P}(E), \]
+where $\pi_{E} = \int_{E} f(\mathbf{v}) \, d \mathbf{v}$ is the probability of event $E$ according to beliefs $f(\mathbf{v})$. 
+(Representative element $p_{i,j}$ in $\mathbf{P}$ indicates the probability of the $i$th candidate winning if the voter submits the $j$th ballot.) Then the vector $\mathbf{\overline{u}} = \mathbf{u} \mathbf{P} = (\overline{u}_1, \overline{u}_2, \ldots, \overline{u}_B)$ gives the voter's expected utility from submitting each possible ballot. Thus determining the optimal ballot given beliefs and preferences reduces to the problem of computing $\mathbf{P}$, which in turn reduces to the problem of enumerating election events (i.e. election results where the effect of a single ballot on the winner is homogeneous) and computing their probability. 
+
+Generally, there are two types of election events: at *pivot events* the winner depends on the voter's ballot; at *non-pivot events* it does not.  
+
+
+
+Ultimately, the voter 
+
 
 
 ## Overall motivation and plan 
@@ -17,7 +90,7 @@ Define pivot events and show how to calculate them in a general way, not limited
 
 ## Pivot events and pivot probabilities 
 
-Consider an election involving $K$ candidates. Let $\mathcal{B}$ denote the set of admissible ballots, with $x$ referring to one of those ballots. The voting system is anonymous (i.e. it treats each voter's ballot equally), so an election outcome can be represented as a vector $\mathbf{v}$ of ballot shares, with element $v_x$ denoting the share of voters submitting ballot $x$; $\mathbf{v}$ lives on the $|\mathcal{B}|$-dimensional unit simplex $\mathbb{S}^{|\mathcal{B}|}$, with $v_x \in [0,1]$ for all ballots and $\sum \mathbf{v} = 1$.
+Consider an election involving $K$ candidates. Let $\mathcal{B}$ denote the set of admissible ballots. The voting system is anonymous (i.e. it treats each voter's ballot equally), so an election outcome can be represented as a vector $\mathbf{v}$ of ballot shares, with element $v_x$ denoting the share of voters submitting ballot $x \in \mathcal{B}$; $\mathbf{v}$ lives on the $|\mathcal{B}|$-dimensional unit simplex $\mathbb{S}^{|\mathcal{B}|}$, with $v_x \in [0,1]$ for all ballots and $\sum \mathbf{v} = 1$.
 
 Pivot events are subsets of election results where a single ballot can affect the outcome; a specific pivot event is the subset of election results where a single ballot can affect the outcome in a distinct way. More formally, let $w(x \mid \mathbf{v})$ be a function indicating which candidate wins at a given outcome $\mathbf{v}$ when an additional ballot $x$ is submitted. Pivot events are election outcomes where $w(x \mid \mathbf{v})$ is non-degenerate, i.e. its output depends on $x$. A specific pivot event is the subset of election outcomes with a common distinct mapping $w(x \mid \mathbf{v})$. 
 
@@ -29,61 +102,268 @@ Pivot events are subsets of election results where a single ballot can affect th
 <!-- \end{align} -->
 <!-- We can partition $\mathbb{S}^{|\mathcal{B}|}$ such that each subset has a single unique mapping $w(x \mid \mathbf{v})$. Each subset in which $w(x \mid \mathbf{v})$ is non-degenerate is a distinct *pivot event*.   -->
 
-The probability of a pivot event occurring is referred to as the *pivot probability*. Suppose an election outcome $\mathbf{v}$ is the realization of a random variable $\mathbf{V}$ with associated distribution function $f_{\mathbf{V}}(\mathbf{v})$.  
-Then if $E$ is the pivot event of interest, 
+The probability of a pivot event occurring is referred to as the *pivot probability*. Suppose an election outcome $\mathbf{v}$ is the realization of a random variable $\mathbf{V}$ with associated distribution function $f_{\mathbf{V}}(\mathbf{v})$.  In what follows we will assume that $\mathbf{V}$ is a continuous random variable, so that $f_{\mathbf{V}}(\mathbf{v})$ is a probability density function; one benefit of this assumption is that we can ignore the question of how ties are broken.
+It follows that if $E$ is the pivot event of interest, 
 <!-- and $f(\matbf{v})$ denotes the distribution over election outcomes,  -->
-the pivot probability can be written  
+the associated pivot probability can be written  
 \[
+\text{Pr}(E) = 
 \int_{E} f(\mathbf{v}) \, d\mathbf{v}.
 \]
 
-In what follows we will assume that $\mathbf{V}$ is a continuous random variable, so that $f_{\mathbf{V}}(\mathbf{v})$ is a probability density function. Assuming $\mathbf{V}$ is continuous rather than discrete means that exact ties do not occur, which simplifies notation. It also allows us to do integration XXX. Also I think it means we can focus on binary relations?  
-<!-- It also allows us to use parametric functions  approximate pivot probabilities with  -->
-<!-- More importantly, it means that the calculation of pivot probabilities is a problem of integration rather than combinatorics. -->
+All pivot events (at least those in voting systems in common use) can be represented by a set of conditions on the ballot shares $\mathbf{v}$. For example, in a plurality contest involving candidates $a$, $b$, $c$, and $d$, we can call pivot event $ab$ the set of outcomes where a single ballot can change the winner from $a$ to $b$. If $v_i$ denotes the vote share for candidate $i$, this pivot event can be represented by the conditions   
+\begin{align}
+v_a - v_b \in \left(0, \frac{1}{n}\right)  \\
+v_a - v_c > \frac{1}{n}\\
+v_a - v_d > \frac{1}{n}
+\end{align} 
+where $n$ is the size of the electorate. The idea is that a single ballot carries vote share $\frac{1}{n}$; for any outcome satisfying the conditions above, $b$ is so close behind $a$ that a single ballot can change the winner from $a$ to $b$, but no other candidate is close enough to $a$ to be elected. 
 
-In commonly used voting systems, pivot events are "nearly hyperplanes" -- that is, they  
+Consider another plurality pivot event where a single ballot could change the winner from $a$ to either $b$ or $c$, which we might call pivot event $abc$. In a four-candidate race, this pivot event is characterized by two near-equalities and one inequality: 
+\begin{align}
+v_a - v_b \in \left(0, \frac{1}{n}\right)  \\
+v_a - v_c \in \left(0, \frac{1}{n}\right) \\
+v_a - v_d > \frac{1}{n}.
+\end{align} 
+We will refer to a pivot event defined by $k$ near-equalities as a $k$th-order pivot event. 
 
-I thought I had an algorithm for discovering all of the pivot probabilities. Start with the win conditions for an arbitrary candidate $a$ for the given voting system; in general, the winning conditions for a candidate in a voting system will be the union of one or more sets of inequalities on the vote shares, with each inequality pertaining to the comparison of a pair of candidates. For each set of inequalities, and each inequality comparing $a$ and $b$, narrowly reverse the $a$ and $b$ comparison. If some other specific candidate is the winner given $a$'s other win conditions, you have identified conditions for a pivot event. If $a$ remains the winner given $a$'s other win conditions, this is not a pivot event. If instead the identity of the winner depends on further conditions (i.e. conditions not part of $a$'s win conditions), then enumerate the possible conditions; each set of conditions (win conditions plus any extra conditions) that produce a winner other than $a$ corresponds to a pivot event. Having enumerated the conditions for pivot events involving a reversal of $a$ and $b$, you can re-index the candidates to get all pivot events. 
+## Estimation of exact pivot probabilities 
 
-I thought this algorithm would not uncover pivot event $ab.cb$ in IRV. The win conditions for $a$ are $v_a > v_c$, $v_b > v_c$, $v_a + v_{ca} > v_b + v_{cb}$ and $v_a > v_b$, $v_c > v_b$, $v_a + v_{ba} > v_c + v_{bc}$. For the first set we narrowly reverse the second-round condition (because that's the one involving $b$) and get $ab2$.  For the second set we narrowly reverse the first-round condition $v_a > v_b$, in which case $a$ is eliminated but the winner is ambiguous. The possibilities are $v_b + v_{ab} > v_c + v_{ac}$, in which case $b$ wins and we have $ab.ab$, or $v_b + v_{ab} < v_c + v_{ac}$, in which case $c$ wins and we have $ab.ac$. But because we start from a candidate's win conditions we wouldn't get $ab.cb$. It seems that the rule "start from win conditions and reverse the $a$-$b$ condition" doesn't produce all pivot events. 
+Given $n$, we could estimate exact pivot probabilities a few ways. 
 
-What about doing further reversals? If we narrowly reverse $v_c > v_b$, then again the winner is ambiguous. The possibilities are $v_a + v_{ca} > v_b + v_{cb}$, in which case the winner remains $a$ and it's not a pivot event, or $v_a + v_{ca} < v_b + v_{cb}$, in which case the winner is $b$ and it's pivot event $bc.ac$. So by including this reversal, we get $ab2$, $ab.ab$, $ab.ac$, and $bc.ac$ from $a$'s win conditions. And presumably applying the same rule to other pairs we would get $ab.cb$ from another pair. But what is the rule really? If we're not just reversing rules involving $a$ and $b$, then from $a$'s win conditions we would also get $ac2$ (second set), $ac.ac$, $ac.ab$, and $bc.ba$. So I think we have an algorithm that is overbroad, i.e. it gets the same pivot event more than once. 
+We can do numerical integration to get a near-exact value. Here's how that looks for a case with 50,000 voters and a $\text{Dirichlet}(10,8,4)$ distribution over election results: 
+
+```{r exact_sc_illustration}
+n <- 50000
+alpha <- c(10, 8, 4)
+x <- (1 + 1/n)/3
+y <- (1 + 2/n)/3
+z <- (1 + 1/n)/2
+ab <- tribble(
+  ~a, ~b,
+  1/2, 1/2,
+  x, x,
+  y, y - 1/n, 
+  z, z - 1/n,
+  1/2, 1/2) %>% mutate(c = 1 - a- b) %>% as.matrix()
+
+ba <- ab[,c(2,1,3)] 
+
+abc <- tribble(
+  ~a, ~b,
+  y, y - 1/n, 
+  x,x,
+  1/3, 1/3,
+  x, x-1/n) %>% mutate(c = 1 - a- b) %>% as.matrix()
+
+# could tesselate with this:
+tess_ab <- geometry::delaunayn(ab[, -ncol(ab)])
+tess_ba <- geometry::delaunayn(ba[, -ncol(ba)])
+tess_abc <- geometry::delaunayn(abc[, -ncol(abc)])
+
+S_ab <- array(c(cbind(ab[1, ], ab[2,], ab[3,]), cbind(ab[1, ], ab[3,], ab[4,])), dim = c(3,3,2))
+S_ba <- array(c(cbind(ba[2, ], ba[4,], ba[3,]), cbind(ba[2, ], ba[4,], ba[1,])), dim = c(3,3,2))
+S_abc <- array(c(cbind(abc[4, ], abc[1,], abc[3,]), cbind(abc[2, ], abc[1,], abc[3,])), dim = c(3,3,2))
+out_ab <- SimplicialCubature::adaptIntegrateSimplex(f = dirichlet_for_integration, S = S_ab, alpha = alpha)
+out_ba <- SimplicialCubature::adaptIntegrateSimplex(f = dirichlet_for_integration, S = S_ba, alpha = alpha)
+out_ba2 <- SimplicialCubature::adaptIntegrateSimplex(f = dirichlet_for_integration, S = S_ab[,c(2,1,3),], alpha = alpha)
+out_ba$integral
+out_ba2$integral
+out_abc <- SimplicialCubature::adaptIntegrateSimplex(f = dirichlet_for_integration, S = S_abc, alpha = alpha)
+out_ac <- SimplicialCubature::adaptIntegrateSimplex(f = dirichlet_for_integration, S = S_ab, alpha = alpha[c(1,3,2)])
+
+```
+
+Another option for computing the exact pivot probability is Monte Carlo simulation: generate a large number of elections and count the proportion of results that satisfy the conditions for a given pivot event. Given a large $n$ and a rare pivot event, the probability is very small and our estimate may have high variance. 
+
+Here is an illustration of estimating pivot probability $\pi_{ab}$ in the case above (electorate of size 50,000): 
+
+```{r mc_illustration, cache = T}
+J <- 50
+m <- 1000000
+set.seed(12345)
+pi_abs <- rep(NA, J)
+for(j in 1:J){
+  sims <- gtools::rdirichlet(m, alpha)
+  pi_ab <- mean(sims[,1] - sims[,2] > 0 & sims[,1] - sims[,2] < 1/n & sims[,1] - sims[,3] > 1/n)
+  pi_abs[j] = pi_ab
+}
+```
+
+```{r mc_illustration_plot}
+data.frame("pi_ab" = pi_abs) %>% 
+  ggplot(aes(x = pi_ab)) + 
+  geom_histogram() + 
+  geom_vline(xintercept = out_ab$integral, col = "red")
+```
+
+Why use approximations then? 
 
 
 
-defined by a system of inequalities and one near-equality, where the near-equality ensures that one ballot could change the outcome. For example, in a plurality contest where $v_i$ is candidate $i$'s vote share, the pivot event where a single ballot could elect $b$ instead of $a$ satisfies the conditions $v_a > v_i \, \forall \, i$ and $v_a - v_b < \frac{1}{n}$, where $n$ is the size of the electorate. (In words, a single ballot could change the winner from $a$ to $b$ if $a$ is leading but $b$ is less than vote vote behind.)  Thus (as noted by Hoffman 1983) pivot events tend to be "thin". This allows 
 
-We can therefore approximate 
+Pivot events are generally subspaces in $|\mathcal{B}|$ dimensions, but given a large electorate a $k$th-order pivot event is *almost* in $|\mathcal{B}| - k$ dimensions. For example, a $1$st-order pivot event in a three-candidate plurality contest, which is a near-tie for first between two candidates, is a strip of width $1/n$; a $1$st-order pivot event in a four-candidate plurality contest is like a piece of paper with thickness $1/n$. A $2$nd-order pivot event in a three-candidate plurality contest is basically a point. (Presumably can say same about other voting systems.) This suggests an approximation. 
 
-
-## Pivot probabilities
-
-
-<!-- integrating a continuous function rather than a combinatorial problem.    -->
-
-
-Let $E$ denote a pivot event of interest. 
-
-In practice, the conditions for a pivot event include a set of inequalities and one near-equality. For example, in a plurality contest where $v_i$ is candidate $i$'s vote share, the pivot event where a single ballot could elect $b$ instead of $a$ satisfies the conditions $v_a > v_i \, \forall \, i$ and $v_a - v_b < \frac{1}{n}$. Let $\mathcal{L}_e$ denote the locus of points where these inequalities are satisfied and the near-equality is satisfied with equality. Then we can approximate the pivot probability as 
+**Approximation** Let $E'$ denote an alteration of pivot event $E$ where $\frac{1}{n}$ is replaced by 0 (i.e. where $n = \infty$). Taking the example of pivot  The probability of $E$ can be approximated by 
 \[
-\frac{1}{n} \int_{E} f(\mathbf{v}) \, d\mathbf{v}.
+\text{Pr}(E) \approx \left(\frac{1}{n}\right)^k \int_{E'} f(\mathbf{v}) \, d\mathbf{v}.
 \]
+Need some proof of this. 
+
+**Equivalence of approximations** There may be distinct pivot events $E_1$ and $E_2$ whose altered conditions $E_1'$ and $E_2'$ are equivalent. For example, the conditions under which a single ballot could change the winner from $a$ to $b$ (pivot event $ab$) are distinct from the conditions under which a single ballot could change the winner from $b$ to $a$ (pivot event $ba$), but when we set the near equality in each condition to an equality the resulting conditions are equivalent. Thus our approximation for $\text{Pr}(ab)$ is equal to our approximation for $\text{Pr}(ba)$. 
+
+**Irrelevance of higher-order pivot events** As Hoffman (1983) and Fisher & Myatt (2017) and others have done, we will focus on first-order pivot events. The usual reason is that they are unlikely. Indeed, a second-order pivot event requires two unlikely events to occur. But I wonder if there is a better reason. For plurality, we are basically taking a tiny probability away from a three-way tie and giving it to each two-way tie. It seems like this is equivalent. XXX 
+
+```{r data_for_pps, echo = F}
+n <- 30
+x <- (1 + 1/n)/3
+y <- (1 + 2/n)/3
+z <- (1 + 1/n)/2
+
+abc <- tribble(
+  ~a, ~b,
+  1/3, 1/3,
+  x, x,
+  y, y - 1/n,
+  x, x - 1/n,
+  1/3, 1/3) %>% mutate(c = 1 - a- b, type = "abc")
+
+bac <- tribble(
+  ~a, ~b,
+  1/3, 1/3,
+  x, x,
+  y - 1/n, y,
+  x - 1/n, x,
+  1/3, 1/3) %>% mutate(c = 1 - a- b, type = "bac")
+
+cab <- tribble(
+  ~a, ~b,
+  1/3, 1/3,
+  x - 1/n, x,
+  y - 1/n, y - 1/n,
+  x, x - 1/n,
+  1/3, 1/3) %>% mutate(c = 1 - a- b, type = "cab")
+
+ab <- tribble(
+  ~a, ~b,
+  1/2, 1/2,
+  x, x,
+  y, y - 1/n, 
+  z, z - 1/n,
+  1/2, 1/2) %>% mutate(c = 1 - a- b, type = "ab")
+
+ba <- tribble(
+  ~a, ~b,
+  1/2, 1/2,
+  x, x,
+  y - 1/n, y, 
+  z - 1/n, z,
+  1/2, 1/2) %>% mutate(c = 1 - a- b, type = "ba")
+
+
+ac <- tribble(
+  ~a, ~b,
+  1/2, 0,
+  x, x - 1/n,
+  y, y - 1/n, 
+  z, 0,
+  1/2, 0) %>% mutate(c = 1 - a- b, type = "ac")
+
+ca <- tribble(
+  ~a, ~b,
+  1/2, 0,
+  x, x - 1/n,
+  y - 1/n, y - 1/n, 
+  z - 1/n, 0,
+  1/2, 0) %>% mutate(c = 1 - a- b, type = "ca")
+
+
+bc <- tribble(
+  ~a, ~b,
+  0, 1/2,
+  x - 1/n, x,
+  y - 1/n, y, 
+  0, z,
+  0, 1/2) %>% mutate(c = 1 - a- b, type = "bc")
+
+cb <- tribble(
+  ~a, ~b,
+  0, 1/2,
+  x - 1/n, x,
+  y - 1/n, y - 1/n, 
+  0, z - 1/n,
+  0, 1/2) %>% mutate(c = 1 - a- b, type = "cb")
+
+a_part <- tribble(
+  ~a, ~b,
+  1,0,
+  z, z - 1/n,
+  y, y - 1/n,
+  z, 0,
+  1,0
+)%>% mutate(c = 1 - a- b, type = "a")
+
+b_part <- tribble(
+  ~a, ~b,
+  0,1,
+  z - 1/n, z, 
+  y - 1/n, y, 
+  0, z,
+  0,1
+) %>% mutate(c = 1 - a- b, type = "b")
+
+c_part <- tribble(
+  ~a, ~b,
+  0,0,
+  0, z - 1/n, 
+  y - 1/n, y - 1/n, 
+  z - 1/n, 0,
+  0,0
+) %>% mutate(c = 1 - a- b, type = "c")
 
 
 
+polygons <- bind_rows(
+  abc, 
+  ab,
+  bac,
+  cab,
+  ba,
+  ac,
+  ca,
+  bc,
+  cb)
+#  a_part,
+##  b_part,
+#  c_part)
 
-## Motivation: pivot events and pivot probabilities
+```
 
-Pivot events are election outcomes in which a single vote can change the election outcome. A pivot probability is the probability of a given pivot event occuring. Computing pivot probabilities is important for determining the optimal (strategic) vote, for computing how much a voter gains by voting strategically rather than sincerely, and for assessing a voting system's susceptibility to strategic voting.
+```{r plot_for_pp3, echo = F}
 
-[More on pivot events -- examples?]
+# polygons %>% 
+#   ggplot(aes(x = a, y = b, fill = type)) + 
+#   geom_polygon() 
+
+polygons %>% mutate(x = a + .5*b,
+             y = sqrt(3/4)*b) %>% 
+  ggplot(aes(x = x, y = y, fill = type)) + 
+  geom_polygon() + 
+  coord_fixed() + 
+  theme_void() + 
+  expand_limits(x = c(-.1, 1.1), y = sqrt(3/4)*c(-.1, 1.1)) + 
+  annotate(geom = "text", x = c(1,.5,0), y = c(0,sqrt(3/4),0) + .05*c(-1,1,-1), label = c("a", "b", "c")) + 
+  votevizr::geom_ternary_boundary()
+
+```
 
 
-## Voting rules and win conditions 
 
-Consider a voting system to elect a single winner from among $K$ candidates. Let $\mathcal{B}$ denote the set of admissible ballots, with $|\mathcal{B}| = B$; let $v_b$ denote the share of all voters casting ballot $b$, with $v_b \in [0,1] \, \forall \, b \in \mathcal{B}$ and $\sum_{i \in \mathcal{B}} v_i = 1$. 
+<!-- (Note also that this pivot encompasses situations where a single vote for $c$ or $d$ could make that candidate the winner. Thus the dyadic pivot events encompass three-way or four-way ties. But note that this conflicts with my definition of pivot events.) -->
 
-A voting system that is anonymous (meaning that it only the count of ballots matters, not who submitted them) and neutral (meaning that it treats each candidate equally) can be characterized by defining the set of admissible ballots $\mathcal{B}$ and a set of *win conditions*, which are linear inequalities on $\mathbf{v}$ such that a given candidate wins. 
+Here is one way to list all of the first-order pivot events in a given voting system. First, write down the conditions under which one candidate (say $a$) wins in that system; this is a system of inequalities involving $\mathbf{v}$. Now, reverse the inequality in one of these conditions. If the reversal produces a new winner, you can add a pivot event to the list by converting the reversed inequality to a near-equality. If the winner depends on further conditions, check all possibile combinations of further conditions that identify the winner and for each set of further conditions that produce a new winner add a pivot event to the list, again converting the reversed inequality to a near-equality. Continuing this procedure for all candidates will produce an exhaustive list.
+
+## Examples 
 
 For example, plurality is the voting system where each admissible ballot names one candidate (so that $v_i$ is the share of votes for candidate $i$) and candidate $a$ wins if 
 \[v_a > v_j \, \forall \, j \neq a.\]
@@ -91,8 +371,10 @@ For example, plurality is the voting system where each admissible ballot names o
 
 [^simplify_fn]: An alternative way to simplify exposition is to assume a fixed rule for determining the winner when two candidates receive the same vote share, such as lexicographic precedence. 
 
-In the broader class of positional methods such as Borda count, voters submit rankings of candidates and each candidate $i$ receives a score $s_i$ that depends on how many of each ranking she receives and how much each ranking is worth. For example, given $k$ candidates, a $k$th-place ranking is worth $K - k$ points in Borda count; in anti-plurality, it is worth 0 points if $k = K$ and 1 otherwise; in plurality it is worth 1 point if $k = 1$ and 0 otherwise.) Then candidate $a$ wins if 
-\[s_a > s_j \, \forall \, j \neq a.\]
+In the broader class of positional methods such as Borda count, voters submit rankings of candidates and each candidate $i$ receives a score $s_i$ that depends on how many of each ranking she receives and how much each ranking is worth. For example, in plurality a first-place ranking is worth one point and other rankings are worth zero points; in anti-plurality a last-place ranking is worth 0 points and other rankings are worth 1 point; in Borda count (given $K$ candidates) a $k$th-place ranking is worth $K - k$ points. Then candidate $a$ wins if 
+\[s_a > s_j \, \forall \, j \neq a\]
+and pivot event $avg
+
 <!-- and each candidate is assigned a score based on  -->
 <!-- Borda count is the voting system where each voter submits a ranking of candidates, candidate $i$'s score (given three candidates $i$,$j$, and $k$) is $s_i = v_{ijk} + v_{ikj} + \frac{1}{2}\left(v_{jik} + v_{kij}\right)$, and candidate $a$ wins if -->
 <!-- \begin{align} -->

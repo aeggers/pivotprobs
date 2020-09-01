@@ -88,6 +88,7 @@ I tried specifying the fourth dimension, but this generates an error: "not enoug
 I suppose it's because these are on a plane, and it's looking to put tetrahedrons into this space. In that case, this should work, and it should return a single row: 
 
 ```{r vertices_check}
+# note we are leaving off a dimension
 geometry::delaunayn(rbind(
   c(1/2, 1/2, 0),
   c(1/2, 0, 1/2),

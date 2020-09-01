@@ -192,6 +192,11 @@ this_sigma <- diag(4)*c(.5, .25, .1, 0)
 out_ln <- exact_plurality_pivot_probabilities(mu = c(1,.5, .25, 0), sigma = this_sigma, tol = .001, maxEvals = 100000)
 P <- P_mat_from_eppp(out_ln)
 
+
+out <- exact_plurality_pivot_probabilities(alpha = c(10, 9, 6), tol = .001, maxEvals = 100000)
+P <- P_mat_from_eppp(out)
+
+
 # OK that's cool!
 # so what do I have: I have a way to get all the pivot probabilities given parameters. I have a justification of pivot probabilities.
 # I can write this up I guess.
