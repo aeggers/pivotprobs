@@ -44,6 +44,11 @@ S_array_from_vertices_of_integration_region <- function(voir){
 
   # simplified version of simplices_to_integrate_from_win_region_vertices, which subsets to the facets where a constraint binds.
 
+  # if voir is just two points in R3, we just return the transpose of it:
+  if(nrow(voir) < ncol(voir)){
+    return(t(voir))
+  }
+
   simplex_mat <- geometry::delaunayn(voir[, -ncol(voir)])
 
   data.frame(simplex_mat) %>%
@@ -72,7 +77,201 @@ plurality_inequality_matrix <- function(k, n = 5000){
   cbind(1, -diag(k - 1), rep(1/n, k-1))
 }
 
-S_array_from_inequalities <- function(inequality_mat){
+
+S_array_from_inequalities_and_conditions <- function(inequality_mat, rows_to_alter = c(NULL), drop_dimension = F, limits = c(0,NULL), epsilon = 1.0e-10){
+
+  if(drop_dimension & is.null(rows_to_alter)){
+    stop("With drop_dimension = T you must provide rows_to_alter.")
+  }
+
+  # reformat the inequality matrix  and add the simplex constraints ####
+  a1_mat <- inequality_mat[ ,-ncol(inequality_mat)]
+  b1_vec <- inequality_mat[ ,ncol(inequality_mat)]
+  # the simplex inequality constraints
+  positivity_part <- diag(ncol(a1_mat))
+  a1_mat <- -rbind(a1_mat, positivity_part) # and make negative, as we provide \geq statements but require \leq statements
+  b1_vec <- -c(b1_vec, rep(0, nrow(positivity_part)))
+
+  # the simplex equality condition
+  a2_mat <- matrix(1, nrow = 1, ncol = ncol(a1_mat))
+  b2_vec <- c(1)
+
+  if(!drop_dimension & length(rows_to_alter) >= 1){
+    if(is.null(limits[2])){
+      stop("If not dropping a dimension, you must provide upper and lower limits, e.g. 0 and 1/n.")
+    }
+    if(limits[1] == limits[2]){
+      stop("If not dropping a dimension, the upper and lower limits must not be equal.")
+    }
+    # we are going to convert each specified inequality condition into two near-equality conditions to capture a near tie.
+    # the current conditions are a1[rta,] v \geq b1[rta]
+    # we need to convert these to a1[rta,] v \geq limits[1]
+    # and add one that is a1[rta,] v \leq b1[rta]
+    b1_vec[rows_to_alter] <- -limits[1] # recycling
+    a1_mat <- rbind(a1_mat, -a1_mat[rows_to_alter, ]) # add some \leq conditions
+    b1_vec <- c(b1_vec, rep(limits[2], length(rows_to_alter)))
+  }
+
+  # get the H representation -- this is just a reformatting
+  the_Hrep <- rcdd::makeH(a1 = a1_mat, b1 = b1_vec, a2 = a2_mat, b2 = b2_vec)
+
+  # get the vertices of the convex hull from H representation
+  all_vertices <- rcdd::scdd(the_Hrep)$output[,-c(1,2)]
+
+  # get the tesselated/triangulated convex hull (tch)
+  # this is a matrix with one row per triangle
+  # if a row is c(3, 1, 2), it means rows 3, 1, and 2 of the input make one of the triangles.
+  # not the same as geometry::convhulln(), which I had used before, though I don't see the difference
+  if(!drop_dimension){
+    # we are integrating over a D-1 dimensional space, e.g. for plurality with 3 candidates we have 2-dimensional areas to integrate over. we triangulate and return an array of these triangles.
+    tch <- geometry::delaunayn(all_vertices[,-ncol(all_vertices)])
+    vertices_satisfying_conditions <- 1:nrow(all_vertices)
+  }else{
+    # we are integrating on at most D-2 dimensional facets, e.g. for plurality with 3 candidates we have a line or even a point. we triangulate the convex hull, look for facets that meet the conditions, and return an array of those triangles.
+    tch <- geometry::convhulln(all_vertices[,-ncol(all_vertices)])
+    # check which vertices satisfy the conditions
+    # all_vertices is V by B, relevant part of inequality_mat is rows_to_alter by V+1
+    condition_matrix <- inequality_mat[rows_to_alter,-ncol(inequality_mat)]
+    if(!is.matrix(condition_matrix)){
+      condition_matrix <- matrix(condition_matrix, nrow = length(rows_to_alter), ncol = ncol(inequality_mat) - 1)
+    }
+    deviations <- all_vertices %*% t(condition_matrix) - matrix(inequality_mat[rows_to_alter,ncol(inequality_mat)], nrow = nrow(all_vertices), ncol = length(rows_to_alter), byrow = T)
+    vertices_satisfying_conditions <- which(apply(abs(deviations) < epsilon, 1, all))
+
+    if(length(vertices_satisfying_conditions) == 0){
+      # the conditions don't apply at of these vertices
+      stop("The conditions supplied are not met at any vertex of the convex hull of the inequality matrix supplied.")
+    }else if(length(vertices_satisfying_conditions) < ncol(tch)){
+      # the conditions won't apply on any facet of the convex hull -- e.g. if k=3 they apply only a point; at k = 4 they apply along a line .
+      # we can integrate along lines (not points). We return the result.
+      this <- all_vertices[vertices_satisfying_conditions,]
+      if(!is.matrix(this)){this <- matrix(this, nrow = 1)}
+      return(t(this))
+    }
+
+  }
+
+  #### organize the relevant simplices in an S array ####
+
+  # pivot longer, making the simplex the group
+  data.frame(tch) %>%
+    mutate(simplex = 1:nrow(.)) %>%
+    pivot_longer(cols = starts_with("X"), values_to = "vertex", names_to = "name") %>%
+    select(-name) %>%
+    group_by(simplex) %>%
+    # and select simplices satisfying conditions (if relevant)
+    filter(sum(!vertex %in% vertices_satisfying_conditions) == 0) -> simplex_vertex
+
+  all_vertices_df <- data.frame(vertex = 1:nrow(all_vertices), all_vertices)
+
+  simplex_vertex %>%
+    left_join(all_vertices_df, by = "vertex") %>%
+    select(-vertex) %>% as.matrix() -> simplices
+
+  # in the S array we need for SimplicialCubature, the columns are the vertices of the simplices over which we integrate. (note that's not the usual way R works.)
+  matrix_list <- list()
+  ss <- unique(simplices[,"simplex"])
+  for(s in ss){
+    matrix_list[[as.character(s)]] = t(simplices[which(simplices[,"simplex"] == s), -1])
+  }
+
+  array(matrix_list %>% unlist(), dim = c(nrow(matrix_list[[1]]), ncol(matrix_list[[1]]), length(ss)))
+
+}
+
+test <- F
+if(test){
+  n <- 1000
+  win_3 <- rbind(c(1,-1,0,1/n), c(1,0,-1, 1/n))
+  S_array_from_inequalities_and_conditions(win_3)
+  S_array_from_inequalities_and_conditions(win_3, rows_to_alter = c(1), limits = c(0, 1/n))
+  S_array_from_inequalities_and_conditions(win_3, rows_to_alter = c(2), limits = c(0, 1/n))
+  S_array_from_inequalities_and_conditions(win_3, rows_to_alter = c(1, 2), limits = c(0, 1/n))
+  # this is straddling (i.e. merging pivot events) but not dropping a dimension
+  S_array_from_inequalities_and_conditions(win_3, rows_to_alter = c(1), limits = c(-1/(2*n), 1/(2*n)))
+  # dropping a dimension -- just a line (though not centered, so not merging pivot probs)
+  S_array_from_inequalities_and_conditions(win_3, rows_to_alter = c(1), limits = c(0, 1/n), drop_dimension = T)
+  # dropping a dimension and centered (merging pivot probs)
+  win_3a <- rbind(c(1,-1,0,0), c(1,0,-1, 0))
+  S_array_from_inequalities_and_conditions(win_3a, rows_to_alter = c(1), limits = c(0, 1/n), drop_dimension = T)
+  S_array_from_inequalities_and_conditions(win_3a, rows_to_alter = c(2), limits = c(0, 1/n), drop_dimension = T)
+  # a point.
+  S_array_from_inequalities_and_conditions(win_3a, rows_to_alter = c(1,2), limits = c(0, 1/n), drop_dimension = T)
+  win_4a <- rbind(c(1,-1,0,0,0), c(1,0,-1, 0,0), c(1,0,0, -1,0))
+  S_array_from_inequalities_and_conditions(win_4a, limits = c(0, 1/n))
+  S_array_from_inequalities_and_conditions(win_4a, rows_to_alter = c(1), limits = c(0, 1/n), drop_dimension = F)
+  S_array_from_inequalities_and_conditions(win_4a, rows_to_alter = c(1), limits = c(-1/n, 1/n), drop_dimension = F)
+  S_array_from_inequalities_and_conditions(win_4a, rows_to_alter = c(1,2), limits = c(0, 1/n), drop_dimension = F)
+  S_array_from_inequalities_and_conditions(win_4a, rows_to_alter = c(1,2), limits = c(-1/n, 1/n), drop_dimension = F)
+  S_array_from_inequalities_and_conditions(win_4a, rows_to_alter = c(1), limits = c(0, 1/n), drop_dimension = T)
+  S_array_from_inequalities_and_conditions(win_4a, rows_to_alter = c(1,2), limits = c(0, 1/n), drop_dimension = T)
+  # a point
+  S_array_from_inequalities_and_conditions(win_4a, rows_to_alter = c(1,2,3), limits = c(0, 1/n), drop_dimension = T)
+
+}
+
+
+vertices_of_integration_region_from_inequalities_and_equalities <- function(inequality_mat, indices_to_alter = c(NULL), drop_dimension = F, limits = c(0,0)){
+  # this was an attempt to get the S array from a matrix of inequalities in a way that allows us to specify inequalities to alter.
+  # we can specify inequalities to turn into equalities (drop_dimension). then we get vertices of the integration region.
+  # this works fine if we don't drop_dimension. But if we do, then we can't tesselate the resulting vertices. delaunayn() and convhulln() can't figure out that if we have a plane in 3d, we should switch to finding triangles rather than tetrahedrons. (It only works on convex surfaces.) Seems like a simple issue, but I couldn't find a solution, and I don't think there is a simple general fix: if k = 3 we're talking about a line so no triangulation is needed, if k = 4 we have a plane and unless there are only three vertices we need to apply some rules.
+  # so we'll go back to the previous approach.
+  # the problem is that
+
+  # indices_to_alter indicates the rows of inequality mat that we want to convert to a near inequality (drop_dimension = F) or an equality (drop_dimension = T).
+  # in the case where we do not drop a dimension, `limits` specifies that v_a - v_b \geq limits[1] and v_a - v_b \leq limits[2]
+  # in the case where we *do* drop a dimension, we convert each inequality v_a - v_b \geq 1/n into v_a - v_b = limits[1]
+  # limits could in principle be a matrix when we have several indices to alter, but I can't think of why we would want to use different limits for different conditions
+
+  # the inequalities (leaving out for now the simplex conditions, i.e. v_1 \geq 0, v_2 \geq 0, etc
+  a1_mat <- inequality_mat[ ,-ncol(inequality_mat)]
+  b1_vec <- inequality_mat[ ,ncol(inequality_mat)]
+
+  # the equalities (initially just the simplex condition: \sum{v} = 1)
+  a2_mat <- matrix(1, nrow = 1, ncol = ncol(a1_mat))
+  b2_vec <- c(1)
+
+  if(!drop_dimension){
+    # we are going to convert each specified inequality condition into two near-equality conditions to capture a near tie. .
+    # the current condition is a1[ita,] v \geq b1[ita]
+    # we need to convert that one to a1[ita,] v \geq 0
+    # and add one that is a1[ita,] v \leq b1[ita]
+    b1_vec[indices_to_alter] <- limits[1] # recycling
+    a1_mat <- rbind(a1_mat, -a1_mat[indices_to_alter, ]) # add some \leq conditions
+    b1_vec <- c(b1_vec, rep(-limits[2], length(indices_to_alter)))
+  }else if(drop_dimension){
+    if(length(indices_to_alter) == 0){
+      stop("You can't drop a dimension unless you specify indices_to_alter.")
+    }
+    # we are going to convert each specified inequality condition into an equality condition
+    # stick the current inequalities into the equalities matrix
+    a2_mat <- rbind(a2_mat, a1_mat[indices_to_alter,])
+    b2_vec <- c(b2_vec, rep(limits[1], length(indices_to_alter)))
+    # take them out of the inequalities matrix
+    a1_mat <- matrix(a1_mat[-indices_to_alter,], ncol = ncol(a1_mat))
+    b1_vec <- b1_vec[-indices_to_alter]
+  }
+
+  # add the simplex inequalities, and convert \geq statements to \leq statements
+  positivity_part <- diag(ncol(a1_mat))
+  a1_mat <- -rbind(a1_mat, positivity_part)
+  b1_vec <- -c(b1_vec, rep(0, nrow(positivity_part)))
+
+  # get the H representation -- this is just a reformatting
+  the_Hrep <- rcdd::makeH(a1 = a1_mat, b1 = b1_vec, a2 = a2_mat, b2 = b2_vec)
+
+  # get the vertices of the convex hull from H representation
+  out <- rcdd::scdd(the_Hrep)
+
+  matrix(out$output[, -c(1,2)], nrow = nrow(out$output)) ## I don't need the first two columns
+  # matrix part is because it gets turned into a vector if just one row
+
+  # this is my function
+  # S_array_from_vertices_of_integration_region(voir)
+
+}
+
+S_array_from_inequalities2 <- function(inequality_mat){
 
   inequality_mat %>%
     vertices_of_integration_region_from_inequalities() %>%
@@ -115,8 +314,9 @@ if(test){
 # combn(k, 3)
 
 
-exact_plurality_pivot_probabilities <- function(n = 5000, alpha = NULL, mu = NULL, sigma = NULL, precision = NULL, cand_names = NULL, sep = "", ...){
+plurality_event_probabilities <- function(n = 5000, alpha = NULL, mu = NULL, sigma = NULL, precision = NULL, cand_names = NULL, sep = "", store_time = T, ...){
 
+  time_start <- Sys.time()
   if(!is.null(alpha) | (!is.null(mu) & !is.null(precision)) & is.null(sigma)){
     # this is Dirichlet
     distribution = "dirichlet"
@@ -132,16 +332,19 @@ exact_plurality_pivot_probabilities <- function(n = 5000, alpha = NULL, mu = NUL
 
   if(is.null(cand_names)){cand_names <- letters[1:k]}
 
+  # make matrix of inequalities for candidate a winning outright, given number of candidates k and electorate size n
   im <- plurality_inequality_matrix(k, n = n)
   stopifnot(nrow(im) == k-1)
 
+  # W_mat indicates which candidate (rows) wins given this event and an additional ballot (columns)
   generic_W_mat <- matrix(0, nrow = k, ncol = k, dimnames = list(cand_names, cand_names))
 
+  # storage -- one entry per election event
   out <- list()
 
   # we cycle over candidates
   for(i in 1:k){
-    # we will shuffle the parameters and cand_names so that this candidate is first
+    # we will shuffle the parameters and cand_names so that this candidate is first, i.e. candidate a
     these_indices <- c(i,(1:k)[-i])
     these_cand_names <- cand_names[these_indices]
     # for each number of candidates who could be nearly tied with this one
@@ -170,6 +373,11 @@ exact_plurality_pivot_probabilities <- function(n = 5000, alpha = NULL, mu = NUL
         out[[this_name]]$W_mat <- this_W_mat
       }
     }
+  }
+  if(store_time){
+    time_diff <- Sys.time() - time_start
+    units(time_diff) <- "secs"
+    out$seconds_elapsed <- as.double(time_diff)
   }
   out
 }
