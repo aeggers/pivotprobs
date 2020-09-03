@@ -13,9 +13,11 @@ devtools::load_all(".")
 
 ## Introduction/motivation
 
-Typically scholars look for ways to simplify the problem, either for conceptual clarity or computational efficiency: focus on pivot events (i.e. don't compute the probability of each candidate being elected) because other events don't affect the vote (everyone); focus on three candidates (Fisher, Myatt); ignore pivot events involving more than one tie because they are sufficiently unlikely to not matter (e.g. Hoffman, Fisher-Myatt); focus only on relative pivot probabilities (Fisher-Myatt, Hoffman); assume that one candidate is just as likely to be one vote behind or ahead, i.e. that adjacent pivot events are equally likely (everyone); assume a given structure of beliefs (Fisher-Myatt, Eggers-Vivyan, Eggers-Nowacki). But there are advantages to not making these restrictive assumptions. Clearly methods that allow for more candidates or ballot types are useful when we consider real elections, and allowing for flexible specifications of beliefs could be useful. Computing the probability of each candidate being elected (not just pivot probabilities) allows us to make statements about the efficiency of the voting system. Computing absolute probabilities of pivot events rather than just relative probabilities is useful for generating comparable measures of the incentive to vote or to vote strategically. Separately computing the probability of adjacent pivot events rather than assuming that they are equal may be useful given that the literature on the swing voter's curse and the underdog effect are based on the assumption that differences in adjacent pivot probabilities noticeably affect voter behavior. In many cases ignoring three-way ties and other compound pivot events will make little difference, but this depends on assumptions about the distribution over election outcomes, and in any case we might as well know these probabilities. 
+Typically scholars look for ways to simplify the problem, either for conceptual clarity or computational efficiency: focus on pivot events (i.e. don't compute the probability of each candidate being elected) because other events don't affect the vote (everyone); focus on three candidates (Fisher, Myatt); ignore pivot events involving more than one tie because they are sufficiently unlikely to not matter (e.g. Hoffman, Fisher-Myatt); focus only on relative pivot probabilities (Fisher-Myatt, Hoffman); assume that one candidate is just as likely to be one vote behind or ahead, i.e. that adjacent pivot events are equally likely (everyone except swing voter's curse and underdog effect lit); assume convenient distributions for beliefs (Fisher-Myatt, Eggers-Vivyan, Eggers-Nowacki). 
 
-More generally, starting from the exhaustive approach (with no shortcuts or approximations) helps clarify conceptually what is at stake. If we can precisely compute the probability of all potentially relevant election events, then we can check whether approximations we make for computational efficiency or conceptual simplicity are of any practical consequence. 
+For expositional purposes there is no doubt that it can be useful to simplify the problem. Also, there are circumstances where it is important to compute probabilities quickly (e.g. when many scenarios must be analyzed), and shortcuts like ignoring three-way ties or merging adjacent pivot events may be harmless in particular applications. But there are also some costs to making restrictive assumptions that simplify the computation of election probabilities. Most obviously, there are cases where it is not realistic to assume three candidates or posit Dirichlet beliefs; also, we would like methods that extend to types of elections beyond plurality. For some purposes (such as measuring the efficiency of a voting system) it is useful to compute the probability of each candidate being elected, in which case a method that computes only pivot events is not ideal. Computing absolute probabilities of pivot events rather than just relative probabilities is useful for generating comparable measures of the incentive to vote or to vote strategically. Separately computing the probability of adjacent pivot events rather than assuming that they are equal may be useful given that the literature on the swing voter's curse and the underdog effect are based on the assumption that differences in adjacent pivot probabilities noticeably affect voter behavior. In many cases ignoring three-way ties and other compound pivot events will make little difference, but this depends on assumptions about the distribution over election outcomes, and in any case we might as well know these probabilities. 
+
+More generally, starting from the exhaustive approach (with no shortcuts or approximations) helps clarify conceptually what is at stake. If we can precisely compute the probability of all potentially relevant election events, then we can check whether approximations we make for computational efficiency or conceptual simplicity are of any practical consequence. Notably, although computational efficiency is one of the motivations for previous methods for computing pivot probabilities, we cannot assess the efficiency of any particular method without a benchmark. (MORE HERE.) 
 
 
 ## Framework
@@ -104,6 +106,87 @@ In other methods such as instant-runoff voting and Kemeny-Young (a Condorcet met
 Given a set of inequalities defining election event $E$ and an arbitrary distribution over election outcomes $f(\mathbf{v})$, we can use tools from computational geometry to compute the event probability $\pi_{E} = \int_E f(\mathbf{v}) \, d \mathbf{v}$ with arbitrary precision.
 
 The first step is to determine the vertices that lie at the corners of the subspace defined by the election event; that is, we convert the set of inequalities defining $E$ into a set of vertices defining $E$'s convex hull. (We use the `rcdd::scdd()` function in `R`, which is an implementation of the C library `cddlib`.) Next we apply Delaunay triangulation to divide the region defined by $E$ into disjoint simplices. For example, if $B=3$ we divide $E$ into triangles; if $B = 4$ we divides $E$ into tetrahedrons. (We use the `geometry::delaunayn()` function in `R`, which interfaces with the Qhull library: TODO cite.)  Finally, the adaptive integration algorithm by Genz and Cools (TODO: cite) computes the integral of the election distribution function for each simplex. The algorithm efficiently allocates computational power by using a finer mesh (i.e. computing the density at more points) on simplices where the integrand is less flat. (We implement this using the `SimplicialCubature` package by John P. Nolan.) 
+
+```{r implementing_it_3, cache = T}
+# change f
+alpha3 <- c(10, 7, 5)
+expand_grid(n = 1000, tol = c(.1, .01, .001), skip_non_pivot_events = c(F, T), drop_dimension = c(F,T), merge_adjacent_pivot_events = c(F,T)) %>% 
+  mutate(pep = pmap(., plurality_event_probabilities, alpha = alpha3)) -> results_df
+```
+
+```{r check_P}
+P_mat_from_eppp(results_df$pep[[1]])
+apply(P_mat_from_eppp(results_df$pep[[1]]), 2, sum)
+P_mat_from_eppp(results_df$pep[[nrow(results_df)]])
+apply(P_mat_from_eppp(results_df$pep[[nrow(results_df)]]), 2, sum)
+```
+
+```{r checking_it_3}
+# total times 
+results_df %>% 
+  mutate(time = map(pep, "total")) %>% 
+  mutate(time_elapsed = map(time, "seconds_elapsed")) %>% 
+  unnest(time_elapsed) %>% 
+  select(-n, -time, -pep)
+
+# comparing time 
+results_df %>% 
+  filter(tol == .01) %>% 
+  unnest_longer(pep) %>% 
+  mutate(time_elapsed = map(pep, "seconds_elapsed")) %>% 
+  unnest(time_elapsed) %>% 
+  mutate(type = paste0(skip_non_pivot_events, merge_adjacent_pivot_events, drop_dimension)) %>% 
+  select(type, event = pep_id, time_elapsed) %>% 
+  pivot_wider(names_from = type, values_from = time_elapsed)
+
+# comparing values 
+results_df %>% 
+  filter(tol == .01) %>% 
+  unnest_longer(pep) %>% 
+  mutate(pp = map(pep, "integral")) %>% 
+  unnest(pp) %>% 
+  mutate(type = paste0(skip_non_pivot_events, merge_adjacent_pivot_events, drop_dimension)) %>% 
+  select(type, event = pep_id, pp) %>% 
+  pivot_wider(names_from = type, values_from = pp)
+
+```
+
+```{r implementing_it_4, cache = T}
+# change f
+alpha4 <- c(15, 13, 7, 5)
+expand_grid(n = 1000, tol = c(.1, .01, .001), skip_non_pivot_events = c(F, T), drop_dimension = c(F,T), merge_adjacent_pivot_events = c(F,T)) %>% 
+  mutate(pep = pmap(., plurality_event_probabilities, alpha = alpha4)) -> results_df4
+```
+
+```{r checking_it_4}
+# total times 
+results_df4 %>% 
+  mutate(time = map(pep, "total")) %>% 
+  mutate(time_elapsed = map(time, "seconds_elapsed")) %>% 
+  unnest(time_elapsed) %>% 
+  select(-n, -time, -pep)
+
+# comparing time 
+results_df4 %>% 
+  filter(tol == .01) %>% 
+  unnest_longer(pep) %>% 
+  mutate(time_elapsed = map(pep, "seconds_elapsed")) %>% 
+  unnest(time_elapsed) %>% 
+  mutate(type = paste0(skip_non_pivot_events, merge_adjacent_pivot_events, drop_dimension)) %>% 
+  select(type, event = pep_id, time_elapsed) %>% 
+  pivot_wider(names_from = type, values_from = time_elapsed)
+
+# comparing values 
+results_df4 %>% 
+  filter(tol == .01) %>% 
+  unnest_longer(pep) %>% 
+  mutate(pp = map(pep, "integral")) %>% 
+  unnest(pp) %>% 
+  mutate(type = paste0(skip_non_pivot_events, merge_adjacent_pivot_events, drop_dimension)) %>% 
+  select(type, event = pep_id, pp) %>% 
+  pivot_wider(names_from = type, values_from = pp)
+
+```
 
 ```{r get_answer, cache = T}
 alpha <- c(11, 10, 7, 3)
