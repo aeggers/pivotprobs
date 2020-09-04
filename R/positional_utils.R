@@ -5,7 +5,7 @@ positional_win_conditions <- function(score_vector = NULL, cand_names = NULL, n 
   if(is.null(cand_names)){cand_names <- letters[1:k]}
 
   # get the ballot vector
-  df <- as.data.frame(permutations(n = length(cand_names), r = length(cand_names), v = cand_names))
+  df <- as.data.frame(gtools::permutations(n = length(cand_names), r = length(cand_names), v = cand_names))
   ballot_vector <- apply(df, 1, paste, collapse = "")
 
   sv <- normalize_score_vector(score_vector)
@@ -29,21 +29,112 @@ positional_win_conditions <- function(score_vector = NULL, cand_names = NULL, n 
 
 test <- FALSE
 if(test){
+  # takes 11 seconds, maxEvals reached.
   out1 <- positional_event_probabilities(alpha = c(9, 6, 3,4, 5,7), tol = .1)
+  out1$total$seconds_elapsed
   P_mat_from_eppp(out1)
+  P_mat_from_eppp(out1) %>% apply(2, sum)
   t(c(10, 7, 4)) %*% P_mat_from_eppp(out1)
-  out2 <- positional_event_probabilities(alpha = c(9, 6, 3,4, 5,7), skip_non_pivot_events = T, merge_adjacent_pivot_events = T, tol = .1)
-  out2a <- positional_event_probabilities(alpha = c(9, 6, 4,6, 3,7), skip_non_pivot_events = T, merge_adjacent_pivot_events = T, drop_dimension = T, tol = .1)
-  # these below produce an erroneous facet error
-  # look at that output further, and consider rational arithmetic, or ignoring the error
-  out3 <- positional_event_probabilities(alpha = sample(2:7, size = 24, replace = T), skip_non_pivot_events = T, merge_adjacent_pivot_events = T, tol = .1)
-  # this also produces an erroneous facet error
-  out4 <- positional_event_probabilities(alpha = rep(4, 24), skip_non_pivot_events = T, drop_dimension = T, merge_adjacent_pivot_events = T, tol = .1)
+  # 58 seconds, all messages OK (the binding one was the non pivot events)
+  out1a <- positional_event_probabilities(alpha = c(9, 6, 3,4, 5,7), tol = .1, merge_adjacent_pivot_events = T, drop_dimension = T, maxEvals = 200000)
+  out1a %>% map("message")
+  out1a$total$seconds_elapsed
+  P_mat_from_eppp(out1a)
+  P_mat_from_eppp(out1a) %>% apply(2, sum) # that's better.
+  out2a <- positional_event_probabilities(alpha = c(9, 6, 3,4, 5,7), tol = .1, merge_adjacent_pivot_events = T, drop_dimension = T, skip_non_pivot_events = T, maxEvals = 100000)
+  out2a$total$seconds_elapsed # 7 seconds
+  P_mat_from_eppp(out2a) %>% apply(2, sum) # not very informative
+
+  # now check whether we get the same thing from positional with score_vector 1,0,0 and from plurality
+  alpha3 <- c(10, 8, 6)
+  alpha6 <- c(5,5,4,4,3,3)
+  plurality_out <- plurality_event_probabilities(alpha = alpha3, tol = .01, maxEvals = 200000)
+  # this should take a long time
+  positional_out <- positional_event_probabilities(alpha = alpha6, score_vector = c(1,0,0), tol = .01, maxEvals = 200000)
+  positional_out %>% map("message")
+  # now compare the output
+  plur_integrals <- plurality_out %>% map("integral") %>% unlist()
+  pos_integrals <- positional_out %>% map("integral") %>% unlist()
+  plur_df <- data.frame(pp = names(plur_integrals), value = plur_integrals, stringsAsFactors = F)
+  pos_df <- data.frame(pp = names(pos_integrals), value = pos_integrals, stringsAsFactors = F)
+  pos_df %>%
+    left_join(plur_df, by = "pp", suffix = c("_positional", "_plurality"))
+  # yes they are very close! difference from exact could be because tol != 0. numerical integration issue.
+
+  # let's check dropping dimensions. I think the correction may not be right. let's compare
+  borda_not_dropped <- positional_event_probabilities(alpha = alpha6, score_vector = c(1,.5,0), tol = .1, maxEvals = 200000, skip_non_pivot_events = T, merge_adjacent_pivot_events = T)
+  borda_dropped <- positional_event_probabilities(alpha = alpha6, score_vector = c(1,.5,0), tol = .1, maxEvals = 200000, skip_non_pivot_events = T, drop_dimension = T, merge_adjacent_pivot_events = T)
+  mat <- cbind(borda_not_dropped %>% map("integral"), borda_dropped %>% map("integral"))
+  cbind(mat, unlist(mat[,2])/unlist(mat[,1]))
+
+  thirds_not_dropped <- positional_event_probabilities(alpha = alpha6, score_vector = c(1,1/3,0), tol = .1, maxEvals = 200000, skip_non_pivot_events = T, merge_adjacent_pivot_events = T)
+  thirds_dropped <- positional_event_probabilities(alpha = alpha6, score_vector = c(1,1/3,0), tol = .1, maxEvals = 200000, skip_non_pivot_events = T, drop_dimension = T, merge_adjacent_pivot_events = T)
+  mat <- cbind(thirds_not_dropped %>% map("integral"), thirds_dropped %>% map("integral"))
+  cbind(mat, unlist(mat[,2])/unlist(mat[,1]))
+
+  plur_not_dropped <- positional_event_probabilities(alpha = alpha6, score_vector = c(1,0,0), tol = .1, maxEvals = 200000, skip_non_pivot_events = T, merge_adjacent_pivot_events = T)
+  plur_dropped <- positional_event_probabilities(alpha = alpha6, score_vector = c(1,0,0), tol = .1, maxEvals = 200000, skip_non_pivot_events = T, drop_dimension = T, merge_adjacent_pivot_events = T)
+  mat <- cbind(plur_not_dropped %>% map("integral"), plur_dropped %>% map("integral"))
+  cbind(mat, unlist(mat[,2])/unlist(mat[,1]))
+
+  antiplur_not_dropped <- positional_event_probabilities(alpha = alpha6, score_vector = c(1,1,0), tol = .1, maxEvals = 200000, skip_non_pivot_events = T, merge_adjacent_pivot_events = T)
+  antiplur_dropped <- positional_event_probabilities(alpha = alpha6, score_vector = c(1,1,0), tol = .1, maxEvals = 200000, skip_non_pivot_events = T, drop_dimension = T, merge_adjacent_pivot_events = T)
+  mat <- cbind(antiplur_not_dropped %>% map("integral"), antiplur_dropped %>% map("integral"))
+  cbind(mat, unlist(mat[,2])/unlist(mat[,1]))
+
+  # ok let's do this systematically
+  # nice little function idea from Hadley:
+  # https://stackoverflow.com/questions/31195925/unpacking-and-merging-lists-in-a-column-in-data-frame
+  vector_c <- function(...) {
+    Map(c, ...)
+  }
+
+  expand_grid(one = 1, s = seq(0, .75, by = .25), zero = 0, drop_dimension = c(F, T)) %>%
+    mutate(score_vector = vector_c(one, s, zero)) %>%
+    select(-one, -s, -zero) %>%
+    mutate(result = pmap(., positional_event_probabilities, alpha = alpha6, tol = .2, maxEvals = 200000, skip_non_pivot_events = T, merge_adjacent_pivot_events = T)) -> big_result
+
+  # now we unpack and compare
+  big_result %>%
+    unnest_longer(result) %>%
+    filter(result_id != "total") %>%
+    mutate(integral = map(result, "integral")) %>%
+    unnest_wider(score_vector) %>%
+    unnest(integral) %>%
+    mutate(type = ifelse(drop_dimension, "dropped", "not_dropped")) %>%
+    select(type, s = `...2`, result_id, integral) %>%
+    pivot_wider(values_from = integral, names_from = type) %>%
+    group_by(s) %>%
+    summarize(ratio = mean(dropped/not_dropped)) -> for_plot
+
+#   the_fun <- function(x) 2*sqrt((1 - x + x^2)) this turned out to be the function, implemented below
+
+  for_plot %>%
+    ggplot(aes(x = s, y = ratio)) +
+    geom_smooth()
+
+
+
+
+
+    # I found pivot probabilities were higher by a factor of sqrt(2) in positional when I dropped a dimension. I believe the correction depends on the score_vector (like, it's sqrt(2) for plurality and sqrt(3) for Borda -- I did this work but now I can't find it), so for now I do not allow dropping a dimension in positional methods.
+  # plurality_out <- plurality_event_probabilities(alpha = alpha3, tol = .01, maxEvals = 200000, drop_dimension = T)
+  # positional_out <- positional_event_probabilities(alpha = alpha6, score_vector = c(1,0,0), tol = .01, maxEvals = 200000, drop_dimension = T)   # have added code to rule that out.
+
+  # trying with 4 candidates I ran into the dupridge error. For now we only allow 3 candidates.
+
+  # out3 <- positional_event_probabilities(alpha = sample(2:7, size = 24, replace = T), skip_non_pivot_events = T, merge_adjacent_pivot_events = T, tol = .1)
+
+  # In short, I believe we can do any positional method for three candidates, but we can't drop a dimension.
 
 }
 
 # this reuses a lot of code from the plurality version, but it was a tradeoff between duplicating code and aiming for abstraction that complicated too much
 positional_event_probabilities <- function(score_vector = NULL, skip_non_pivot_events = F, merge_adjacent_pivot_events = F, drop_dimension = F, n = 5000, alpha = NULL, mu = NULL, sigma = NULL, precision = NULL, cand_names = NULL, sep = "", store_time = T, ...){
+
+  if(drop_dimension){
+  #   warning("I am not sure I have the corrections right for dropping a dimension.")
+  }
 
   if(merge_adjacent_pivot_events & drop_dimension){
     limits <- c(1/(2*n), 1/(2*n))
@@ -69,6 +160,11 @@ positional_event_probabilities <- function(score_vector = NULL, skip_non_pivot_e
     stop("Please pass parameters that allow me to determine the intended distribution over election outcomes.")
   }
 
+  if(num_ballots != 6){
+    stop("Positional methods currently only implemented for 3 candidates (6 unique orderings).")
+    # The implementation is there, but I encountered errors in generating the S array. When I suppressed those errors it took forever to process.
+  }
+
   cands_n_ballots <- data.frame(cands = 1:10, ballots = factorial(1:10))
   num_cands <- cands_n_ballots$cands[cands_n_ballots$ballots == num_ballots]
   if(length(num_cands) == 0){stop(paste0("The number of ballot parameters supplied (", num_ballots, ") does not correspond with an integer number of candidates between 1 and 10. Did you not provide a vector with a parameter for all possible orderings of the candidates?"))}
@@ -78,6 +174,8 @@ positional_event_probabilities <- function(score_vector = NULL, skip_non_pivot_e
     warning(paste0("No score_vector supplied. Assuming Borda count with ", num_cands, " candidates."))
     score_vector <- seq(num_cands - 1, 0, by = -1)
   }
+
+  sv <- normalize_score_vector(score_vector)
 
   # make matrix of inequalities for candidate a winning outright, given number of candidates k and electorate size n
   im <- positional_win_conditions(score_vector = score_vector, cand_names = cand_names, n = n)
@@ -124,7 +222,7 @@ positional_event_probabilities <- function(score_vector = NULL, skip_non_pivot_e
           }
         }
         # this is the crucial function: getting the S array (the array of simplices over which top integrate) from conditions, with options
-        this_S <- S_array_from_inequalities_and_conditions(im, rows_to_alter = rta, limits = limits, drop_dimension = drop_dimension)
+        this_S <- S_array_from_inequalities_and_conditions(im, rows_to_alter = rta, limits = limits, drop_dimension = drop_dimension, qhull_options = "Q12") # Q12 is to ignore the dupridge error in delaunayn()
         if(distribution == "dirichlet"){
           if(class(this_S) == "matrix" && ncol(this_S) == 1){
             out[[this_name]] <- list(integral = gtools::ddirichlet(as.vector(this_S), alpha[these_ballot_indices])/sqrt(length(alpha)), functionEvaluations = 1, message = "OK")
@@ -140,7 +238,7 @@ positional_event_probabilities <- function(score_vector = NULL, skip_non_pivot_e
         }
         # if we are integrating at equality rather than near-equality (i.e. integrating on facets rather than in thin subspaces), then we need to thicken out the space. if there were m equalities we multiply by (1/n)^m.
         if(drop_dimension){
-          out[[this_name]]$integral <- out[[this_name]]$integral*((1/(sqrt(2)*n))^m)
+          out[[this_name]]$integral <- out[[this_name]]$integral*((1/(2*sqrt(1 - sv[2] + sv[2]^2)*n))^m)  # I worked out this normalization factor inductively -- see tests above.
         }
 
         ballot_vector <- colnames(im)[-ncol(im)]
@@ -225,7 +323,7 @@ if(test){
 # given a vector of candidaates, return the ordered vector of ordered ballots
 ordered_ballot_vector_from_candidate_vector <- function(cand_names){
   # data frame of misordered candidate names
-  df <- as.data.frame(permutations(n = length(cand_names), r = length(cand_names), v = cand_names))
+  df <- as.data.frame(gtools::permutations(n = length(cand_names), r = length(cand_names), v = cand_names))
   for(j in 1:ncol(df)){
     df[[paste0("V", j)]] <- factor(df[[paste0("V", j)]], levels = cand_names)
   }

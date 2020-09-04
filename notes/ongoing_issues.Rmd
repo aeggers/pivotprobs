@@ -1,0 +1,99 @@
+---
+title: "Open questions and next steps"
+author: "Andy Eggers"
+date: "9/4/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Errors from Qhull in positional methods 
+
+When I try to compute probabilities for a positional race with 4 candidates, I get a big long error referred to as the `dupridge` error in the qhull documentation. This is very annoying because it's possible that I have set up an elegant and flexible way to compute pivot probabilities for $k$-candidate positional elections but because of problems with software beyond my control I cannot go beyond the simplest case.  
+
+```
+>   out3 <- positional_event_probabilities(alpha = sample(2:7, size = 24, replace = T), skip_non_pivot_events = T, merge_adjacent_pivot_events = T, tol = .1)
+Error in geometry::delaunayn(all_vertices[, -ncol(all_vertices)]) :
+  Received error code 5 from qhull. Qhull error:
+QH6271 qhull precision error (qh_check_dupridge): wide merge (130 times wider) due to duplicate ridge with nearly coincident points (0.00056) between f60215 and f60206, merge dist 1.3e-10, while processing p366
+- Ignore error with option 'Q12'
+- To be fixed in a later version of Qhull
+- A bounding box for the input sites may alleviate this error.
+- Vertex distance 0.00056 is greater than 100 times maximum distance 1e-12
+  Please report to bradb@shore.net with steps to reproduce and all output
+ERRONEOUS FACET:
+- f60215
+    - flags: bottom upperDelaunay new seen mergehorizon dupridge mergeridge2
+    - normal:    0.2085   0.2085   0.2085   0.2085   0.2085   0.2085   0.2085   0.2085   0.2085   0.2085   0.2085   0.2085   0.2085   0.2085   0.2085   0.2085   0.2085   0.2085   0.2085   0.2085   0.2085   0.2085   0.2085 3.032e-13
+    - offset: -0.2085144
+    - vertices: p366(v32) p430(v31) p1271(v29) p2282(v28) p1849(v27) p3664(v26) p3866
+In addition: Warning messages:
+1: In positional_event_probabilities(alpha = sample(2:7, size = 24,  :
+  No score_vector supplied. Assuming Borda count with 4 candidates.
+2: In geometry::delaunayn(all_vertices[, -ncol(all_vertices)]) :
+
+ Error in geometry::delaunayn(all_vertices[, -ncol(all_vertices)]) :
+  Received error code 5 from qhull. Qhull error:
+QH6271 qhull precision error (qh_check_dupridge): wide merge (130 times wider) due to duplicate ridge with nearly coincident points (0.00056) between f60215 and f60206, merge dist 1.3e-10, while processing p366
+- Ignore error with option 'Q12'
+- To be fixed in a later version of Qhull
+- A bounding box for the input sites may alleviate this error.
+- Vertex distance 0.00056 is greater than 100 times maximum distance 1e-12
+  Please report to bradb@shore.net with steps to reproduce and all output
+ERRONEOUS FACET:
+- f60215
+    - flags: bottom upperDelaunay new seen mergehorizon dupridge mergeridge2
+    - normal:    0.2085   0.2085   0.2085   0.2085   0.2085   0.2085   0.2085   0.2085   0.2085   0.2085   0.2085   0.2085   0.2085   0.2085   0.2085   0.2085   0.2085   0.2085   0.2085   0.2085   0.2085   0.2085   0.2085 3.032e-13
+    - offset: -0.2085144
+    - vertices: p366(v32) p430(v31) p1271(v29) p2282(v28) p1849(v27) p3664(v26) p3866 
+```
+
+I added the `Q12` option to `geometry::delaunayn()` and `geometry::convhulln()` and ran it again. It seemed to hang.
+
+The documentation on Qhull is at http://www.qhull.org/html/qh-impre.htm. 
+
+It looks I could pursue this by 
+
+- switching away from Qhull
+- waiting until `geometry` updates to `Qhull2019` and trying experimental option `Q14`
+- trying to reproduce the error on a finer grain and seeing if there is something I can do to anticipate and avoid it
+
+For now I am just restricting positional methods to 3 candidates.
+
+And I think I will restrict Kemeny to 3 candidates.  
+
+## Correction for dropping a dimension in positional methods 
+
+I initially got different results when I drop a dimension and do not drop a dimension in positional methods. In the three-candidate case (the only one I've been able to handle so far), I got the same result in plurality and positional with `score_vector` `c(1,0,0)` when I do not drop a dimension. Dropping a dimension gave me pivot probabilities a factor of $\sqrt{2}$ higher. I confirmed in further tests (in `positional_utils.R`) that the factor varies across levels of `s`. I determined what the function seemed to be and have applied this. I now have approximately the same answers from dropping a dimension and not dropping a dimension. If this correction is correct, then I suspect it's correct even as we go to higher-order pivot events, but it won't work for more candidates, as the scoring system can no longer be characterized in terms of a single parameter `s`. But I don't understand why this is the correct scaling, and if I did understand it I could maybe do the extension to more candidates. 
+
+## Things to do 
+
+Extra methods: 
+
+- Kemeny for three candidates 
+    - for each candidate, enumerate the decisive condorcet-winner events:
+        - $a_$: $a$ ahead of $b$, $a$ ahead of $c$ 
+        - $a_b$: set $b$ ahead of $c$ and set $a$ ahead of $c$; $a$ just ahead of $b$
+        - $a_c$: set $c$ ahead of $b$ and set $a$ ahead of $b$; $a$ just ahead of $c$
+    - for each candidate, enumerate decisive cyclic events:
+        - $a_F$: set $a$ ahead of $b$, $b$ ahead of $c$, $c$ ahead of $a$, but $a$'s loss to $c$ better than $b$'s loss to $a$
+        - $a_bC$: set $a$ ahead of $b$, $b$ ahead of $c$, $c$ ahead of $a$, but $a$'s loss to $c$ barely better than $b$'s loss to $a$
+        - $a_R$: set $b$ ahead of $a$, $c$ ahead of $b$, $a$ ahead of $c$, but $a$'s loss to $b$ better than $c$'s loss to $a$
+        - $a_cC$: set $b$ ahead of $a$, $c$ ahead of $b$, $a$ ahead of $c$, but $a$'s loss to $b$ barely better than $c$'s loss to $a$
+    - will need to work out P mat for each of these.
+- IRV for three candidates
+- Eggers Vivyan with extra pivot events -- alter the limits of integration, or just assume we merge adjacent pivot events? 
+- Eggers Nowacki for three candidates 
+- Monte Carlo: how general? 
+
+I need to clean up and document code. I have tests in the code, etc. 
+
+Then set up and write up results. 
+
+Should I take a break from this? It's driving me nuts. Very exhausting, and honestly I'm not close to done. Other things sliding past that I could finish. 
+
+
+
+

@@ -108,7 +108,7 @@ Given a set of inequalities defining election event $E$ and an arbitrary distrib
 The first step is to determine the vertices that lie at the corners of the subspace defined by the election event; that is, we convert the set of inequalities defining $E$ into a set of vertices defining $E$'s convex hull. (We use the `rcdd::scdd()` function in `R`, which is an implementation of the C library `cddlib`.) Next we apply Delaunay triangulation to divide the region defined by $E$ into disjoint simplices. For example, if $B=3$ we divide $E$ into triangles; if $B = 4$ we divides $E$ into tetrahedrons. (We use the `geometry::delaunayn()` function in `R`, which interfaces with the Qhull library: TODO cite.)  Finally, the adaptive integration algorithm by Genz and Cools (TODO: cite) computes the integral of the election distribution function for each simplex. The algorithm efficiently allocates computational power by using a finer mesh (i.e. computing the density at more points) on simplices where the integrand is less flat. (We implement this using the `SimplicialCubature` package by John P. Nolan.) 
 
 ```{r implementing_it_3, cache = T}
-# change f
+# chang
 alpha3 <- c(10, 7, 5)
 expand_grid(n = 1000, tol = c(.1, .01, .001), skip_non_pivot_events = c(F, T), drop_dimension = c(F,T), merge_adjacent_pivot_events = c(F,T)) %>% 
   mutate(pep = pmap(., plurality_event_probabilities, alpha = alpha3)) -> results_df
@@ -152,7 +152,7 @@ results_df %>%
 ```
 
 ```{r implementing_it_4, cache = T}
-# change f
+# change
 alpha4 <- c(15, 13, 7, 5)
 expand_grid(n = 1000, tol = c(.1, .01, .001), skip_non_pivot_events = c(F, T), drop_dimension = c(F,T), merge_adjacent_pivot_events = c(F,T)) %>% 
   mutate(pep = pmap(., plurality_event_probabilities, alpha = alpha4)) -> results_df4

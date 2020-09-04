@@ -1,7 +1,7 @@
 # simplicial cubature utils
 
 # This is the key function.
-S_array_from_inequalities_and_conditions <- function(inequality_mat, rows_to_alter = c(NULL), drop_dimension = F, limits = c(0,NULL), epsilon = 1.0e-10){
+S_array_from_inequalities_and_conditions <- function(inequality_mat, rows_to_alter = c(NULL), drop_dimension = F, limits = c(0,NULL), epsilon = 1.0e-10, qhull_options = NULL){
 
   if(drop_dimension & is.null(rows_to_alter)){
     stop("With drop_dimension = T you must provide rows_to_alter.")
@@ -47,11 +47,13 @@ S_array_from_inequalities_and_conditions <- function(inequality_mat, rows_to_alt
   # not the same as geometry::convhulln(), which I had used before, though I don't see the difference
   if(!(drop_dimension & length(rows_to_alter) >= 1)){
     # we are integrating over a D-1 dimensional space, e.g. for plurality with 3 candidates we have 2-dimensional areas to integrate over. we triangulate and return an array of these triangles.
-    tch <- geometry::delaunayn(all_vertices[,-ncol(all_vertices)])
+    N <- ncol(all_vertices) - 1
+    QzQx <- ifelse(N >= 4, "Qx", "Qz")
+    tch <- geometry::delaunayn(all_vertices[,-ncol(all_vertices)], options = paste("Qcc Qc Qt", QzQx, qhull_options, sep = " ")) #
     vertices_satisfying_conditions <- 1:nrow(all_vertices)
   }else{
     # we are integrating on at most D-2 dimensional facets, e.g. for plurality with 3 candidates we have a line or even a point. we triangulate the convex hull, look for facets that meet the conditions, and return an array of those triangles.
-    tch <- geometry::convhulln(all_vertices[,-ncol(all_vertices)])
+    tch <- geometry::convhulln(all_vertices[,-ncol(all_vertices)], options = paste("Tv", qhull_options, sep = " "))
     # check which vertices satisfy the conditions
     # all_vertices is V by B, relevant part of inequality_mat is rows_to_alter by V+1
     condition_matrix <- inequality_mat[rows_to_alter,-ncol(inequality_mat)]
