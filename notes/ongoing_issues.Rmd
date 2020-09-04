@@ -7,6 +7,10 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+devtools::load_all()
+# source("R/positional_utils.R") # for ordered ballot vector thing
+# source("R/simplicial_cubature_utils.R") # for S creation
 ```
 
 ## Errors from Qhull in positional methods 
@@ -95,5 +99,159 @@ Then set up and write up results.
 Should I take a break from this? It's driving me nuts. Very exhausting, and honestly I'm not close to done. Other things sliding past that I could finish. 
 
 
+## Cleaning up and generalizing code
 
+I have undertaken a new approach that I think is really promising. Each event is a set of conditions, a vector of rows to alter, and a $P$ matrix at those conditions. Then we cycle through permutations of the candidates and compute each pivot event for each permutation. (The cycling works differently when it comes to parameters depending on whether it is a single-ballot or ordinal system.) 
+
+To do on this: 
+
+- check if the answers are correct
+- define adjacent events in the spec and update cod to do this
+- make the scaling factor 1 by default, and only specify it otherwise
+- write a function to make plurality events given n and k
+- decide how to store the events as part of the package -- that's data. 
+- add Condorcet
+
+The event specs are below. 
+
+
+```{r events_plurality}
+el <- list()
+n <- 1000
+el[["i_"]] <- list(
+  conditions = rbind(c(1, -1, 0, 0, 1/n),    # i beats j
+                      c(1, 0, -1, 0, 1/n),   # i beats k
+                      c(1, 0, 0, -1, 1/n)),  # i beats l
+  rows_to_alter = c(),
+  scaling_factor = 1,
+  P = rbind(rep(1, 4), 0, 0, 0)
+)
+
+el[["i_j"]] <- list(
+  conditions = el[["i_"]]$conditions,
+  rows_to_alter = c(1),                      # i barely beats j
+  scaling_factor = 1/(sqrt(2)*n),
+  P = rbind(c(1,0,1,1), c(0,1,0,0), 0, 0)
+)
+
+el[["i_jk"]] <- list(
+  conditions = el[["i_"]]$conditions,
+  rows_to_alter = c(1,2),                    # i barely beats j and k
+  scaling_factor = (1/(sqrt(2)*n))^2, 
+  P = rbind(c(1,0,0,1), c(0,1,0,0), c(0,0,1,0), 0)
+)
+
+```
+
+For plurality, we would want to develop some methods for generating these conditions for $k$ candidates -- that's 10 minutes work. 
+
+For a positional method with 3 candidates: 
+
+```{r events_positional}
+
+positional_event_list <- function(n = 1000, s = .5){
+  el <- list()
+  n <- 1000
+  s <- .5
+  
+  el[["i_"]] <- list(
+    conditions = rbind(c(1-s, 1, s-1, -1, s, -s, 1/n),  # i scores above j
+                     c(1, 1-s, s, -s, s-1, -1, 1/n)),   # i scores above k
+    rows_to_alter = c(),
+    scaling_factor = 1,
+    P = rbind(rep(1, 6), 0, 0, 0)
+    )
+  
+  el[["i_j"]] <- list(
+    conditions = el[["i_"]]$conditions,
+    rows_to_alter = c(1),                               # i barely scores above j
+    scaling_factor = 1/(2*sqrt(1 - s + s^2)*n),
+    P = rbind(c(1,1,s,0,1,1-s),
+            c(0,0,1-s,1,1,s),
+            0)
+    )
+  
+  el
+}
+
+borda_events <- positional_event_list()
+
+```
+
+For IRV with 3 candidates: 
+
+```{r events_irv}
+irv_events <- list()
+n <- 1000
+irv_events[["i__j"]] <- list(
+  conditions = rbind(c(1, 1,0,0,-1,-1, 1/n),  # i beats k in first round
+                     c(0,0,1,1,-1,-1,1/n),    # so does j
+                     c(1,1,-1,-1,1,-1, 1/n)), # i beats j in second round
+  rows_to_alter = c(),
+  scaling_factor = 1,
+  P = rbind(rep(1, 6), 0, 0, 0)
+)
+
+irv_events[["i_j"]] <- list(
+  conditions = irv_events[["i__j"]]$conditions,
+  rows_to_alter = c(3),                        # i barely beats j in second round 
+  scaling_factor = 1, # not sure about this -- will have to find out
+  P = rbind(c(1,1,0,0,1,0), c(0,0,1,1,0,1), 0))
+
+irv_events[["i_j|ij"]] <- list(
+  conditions = rbind(c(-1, -1,0,0,1,1, 1/n),    # k beats i in first round
+                     c(0,0,-1,-1,1,1,1/n),      # k beats j in first round
+                     c(1,1,-1,-1,0,0, 1/n),     # i beats j in first round
+                     c(1,1,1,-1,-1,-1, 1/n),    # i beats k in second round
+                     c(1,-1,1,1,-1,-1, 1/n)),   # j beats k in second round
+  rows_to_alter = c(3),                         # i barely beats j in first round
+  scaling_factor = 1, # not sure about this -- will have to find out
+  P = rbind(c(1,1,0,0,1,1), c(0,0,1,1,0,0), 0))
+
+i_j_ik_conditions <- irv_events[["i_j|ij"]]$conditions 
+i_j_ik_conditions[5,] <- -i_j_ik_conditions[5,]
+
+irv_events[["i_j|ik"]] <- list(
+  conditions = i_j_ik_conditions,
+  rows_to_alter = c(),
+  scaling_factor = 1, # not sure about this -- will have to find out
+  P = rbind(c(1,1,1,1,0,0), 0, c(0,0,0,0,1,1)))
+
+i_j_kj_conditions <- irv_events[["i_j|ij"]]$conditions 
+i_j_kj_conditions[4,] <- -i_j_ik_conditions[4,]
+
+irv_events[["i_j|kj"]] <- list(
+  conditions = i_j_kj_conditions,
+  rows_to_alter = c(),
+  scaling_factor = 1, # not sure about this -- will have to find out
+  P = rbind(0, c(0,0,1,1,0,0), c(1,1,0,0,1,1)))
+
+```
+
+OK then what do we do with these events lists? 
+
+The idea is to cycle through all orderings of candidates and get all of these probabilities. We can use chunks from what we have already.
+
+How would this look? 
+
+```{r cycle_func}
+# see function event_probabilities_from_event_list()
+```
+
+```{r try_it_basic, cache = T}
+irv_out <- event_probabilities_from_event_list(event_list = irv_events, alpha = rep(5, 6), cand_names = c("a", "b", "c"))
+
+plurality_out <- event_probabilities_from_event_list(event_list = el, alpha = c(10, 9, 6, 4), cand_names = c("a", "b", "c", "d"), ordinal = F)
+
+borda_out <- event_probabilities_from_event_list(event_list = borda_events, alpha = rep(5, 6), cand_names = c("a", "b", "c"), ordinal = T)
+```
+
+
+```{r try_it_drop_skip, cache = T}
+irv_out <- event_probabilities_from_event_list(event_list = irv_events, alpha = rep(5, 6), cand_names = c("a", "b", "c"), drop_dimension = T, skip_non_pivot_events = T)
+
+plurality_out <- event_probabilities_from_event_list(event_list = el, alpha = c(10, 9, 6, 4), cand_names = c("a", "b", "c", "d"), ordinal = F, drop_dimension = T, skip_non_pivot_events = T)
+
+borda_out <- event_probabilities_from_event_list(event_list = borda_events, alpha = rep(5, 6), cand_names = c("a", "b", "c"), ordinal = T, drop_dimension = T, skip_non_pivot_events = T)
+```
 

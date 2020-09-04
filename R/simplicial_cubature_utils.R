@@ -3,9 +3,10 @@
 # This is the key function.
 S_array_from_inequalities_and_conditions <- function(inequality_mat, rows_to_alter = c(NULL), drop_dimension = F, limits = c(0,NULL), epsilon = 1.0e-10, qhull_options = NULL){
 
-  if(drop_dimension & is.null(rows_to_alter)){
-    stop("With drop_dimension = T you must provide rows_to_alter.")
-  }
+  # I don't think this error was necessary.
+  #if(drop_dimension & is.null(rows_to_alter)){
+  #  stop("With drop_dimension = T you must provide rows_to_alter.")
+  #}
 
   # reformat the inequality matrix  and add the simplex constraints ####
   a1_mat <- inequality_mat[ ,-ncol(inequality_mat)]
