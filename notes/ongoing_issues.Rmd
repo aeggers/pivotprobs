@@ -103,155 +103,142 @@ Should I take a break from this? It's driving me nuts. Very exhausting, and hone
 
 I have undertaken a new approach that I think is really promising. Each event is a set of conditions, a vector of rows to alter, and a $P$ matrix at those conditions. Then we cycle through permutations of the candidates and compute each pivot event for each permutation. (The cycling works differently when it comes to parameters depending on whether it is a single-ballot or ordinal system.) 
 
+Done: 
+- define adjacent events in the spec and update code to do this: if we are merging adjacent pivot events, and if this one has one specified, then substitute ijk in the same way, check if that one is already stored, and if so take it out, stick it in, move on. 
+- write a function to make plurality events given n and k
+
+
 To do on this: 
 
-- check if the answers are correct
-- define adjacent events in the spec and update cod to do this
+- seems like they're not merging -- diagnose and fix.
+- add simulation method, also based on conditions 
+- check if the answers are correct 
+- check also that, when integral should be higher this side of the boundary, we get about the same result for merge_adjacent_pivot_events whether or not we drop_dimension, and the one on this side of the boundary is higher when we do not  merge_adjacent_pivot_events
 - make the scaling factor 1 by default, and only specify it otherwise
-- write a function to make plurality events given n and k
+- make IRV function that takes n and s, with the first round being any positional method 
 - decide how to store the events as part of the package -- that's data. 
-- add Condorcet
+- add Kemeny
+- for each method, check the results with and without drop_dimension. this will help me pick a scaling factor. (see positional_utils.R code for this.)
 
-The event specs are below. 
+Here's some testing of it:
 
+```{r get_events}
+el <- plurality_event_list(n = 1000, k = 4)
+irv_events <- irv_event_list(n = 1000)
+borda_events <- positional_event_list(n = 1000)
 
-```{r events_plurality}
-el <- list()
-n <- 1000
-el[["i_"]] <- list(
-  conditions = rbind(c(1, -1, 0, 0, 1/n),    # i beats j
-                      c(1, 0, -1, 0, 1/n),   # i beats k
-                      c(1, 0, 0, -1, 1/n)),  # i beats l
-  rows_to_alter = c(),
-  scaling_factor = 1,
-  P = rbind(rep(1, 4), 0, 0, 0)
-)
-
-el[["i_j"]] <- list(
-  conditions = el[["i_"]]$conditions,
-  rows_to_alter = c(1),                      # i barely beats j
-  scaling_factor = 1/(sqrt(2)*n),
-  P = rbind(c(1,0,1,1), c(0,1,0,0), 0, 0)
-)
-
-el[["i_jk"]] <- list(
-  conditions = el[["i_"]]$conditions,
-  rows_to_alter = c(1,2),                    # i barely beats j and k
-  scaling_factor = (1/(sqrt(2)*n))^2, 
-  P = rbind(c(1,0,0,1), c(0,1,0,0), c(0,0,1,0), 0)
-)
-
-```
-
-For plurality, we would want to develop some methods for generating these conditions for $k$ candidates -- that's 10 minutes work. 
-
-For a positional method with 3 candidates: 
-
-```{r events_positional}
-
-positional_event_list <- function(n = 1000, s = .5){
-  el <- list()
-  n <- 1000
-  s <- .5
-  
-  el[["i_"]] <- list(
-    conditions = rbind(c(1-s, 1, s-1, -1, s, -s, 1/n),  # i scores above j
-                     c(1, 1-s, s, -s, s-1, -1, 1/n)),   # i scores above k
-    rows_to_alter = c(),
-    scaling_factor = 1,
-    P = rbind(rep(1, 6), 0, 0, 0)
-    )
-  
-  el[["i_j"]] <- list(
-    conditions = el[["i_"]]$conditions,
-    rows_to_alter = c(1),                               # i barely scores above j
-    scaling_factor = 1/(2*sqrt(1 - s + s^2)*n),
-    P = rbind(c(1,1,s,0,1,1-s),
-            c(0,0,1-s,1,1,s),
-            0)
-    )
-  
-  el
-}
-
-borda_events <- positional_event_list()
-
-```
-
-For IRV with 3 candidates: 
-
-```{r events_irv}
-irv_events <- list()
-n <- 1000
-irv_events[["i__j"]] <- list(
-  conditions = rbind(c(1, 1,0,0,-1,-1, 1/n),  # i beats k in first round
-                     c(0,0,1,1,-1,-1,1/n),    # so does j
-                     c(1,1,-1,-1,1,-1, 1/n)), # i beats j in second round
-  rows_to_alter = c(),
-  scaling_factor = 1,
-  P = rbind(rep(1, 6), 0, 0, 0)
-)
-
-irv_events[["i_j"]] <- list(
-  conditions = irv_events[["i__j"]]$conditions,
-  rows_to_alter = c(3),                        # i barely beats j in second round 
-  scaling_factor = 1, # not sure about this -- will have to find out
-  P = rbind(c(1,1,0,0,1,0), c(0,0,1,1,0,1), 0))
-
-irv_events[["i_j|ij"]] <- list(
-  conditions = rbind(c(-1, -1,0,0,1,1, 1/n),    # k beats i in first round
-                     c(0,0,-1,-1,1,1,1/n),      # k beats j in first round
-                     c(1,1,-1,-1,0,0, 1/n),     # i beats j in first round
-                     c(1,1,1,-1,-1,-1, 1/n),    # i beats k in second round
-                     c(1,-1,1,1,-1,-1, 1/n)),   # j beats k in second round
-  rows_to_alter = c(3),                         # i barely beats j in first round
-  scaling_factor = 1, # not sure about this -- will have to find out
-  P = rbind(c(1,1,0,0,1,1), c(0,0,1,1,0,0), 0))
-
-i_j_ik_conditions <- irv_events[["i_j|ij"]]$conditions 
-i_j_ik_conditions[5,] <- -i_j_ik_conditions[5,]
-
-irv_events[["i_j|ik"]] <- list(
-  conditions = i_j_ik_conditions,
-  rows_to_alter = c(),
-  scaling_factor = 1, # not sure about this -- will have to find out
-  P = rbind(c(1,1,1,1,0,0), 0, c(0,0,0,0,1,1)))
-
-i_j_kj_conditions <- irv_events[["i_j|ij"]]$conditions 
-i_j_kj_conditions[4,] <- -i_j_ik_conditions[4,]
-
-irv_events[["i_j|kj"]] <- list(
-  conditions = i_j_kj_conditions,
-  rows_to_alter = c(),
-  scaling_factor = 1, # not sure about this -- will have to find out
-  P = rbind(0, c(0,0,1,1,0,0), c(1,1,0,0,1,1)))
-
-```
-
-OK then what do we do with these events lists? 
-
-The idea is to cycle through all orderings of candidates and get all of these probabilities. We can use chunks from what we have already.
-
-How would this look? 
-
-```{r cycle_func}
-# see function event_probabilities_from_event_list()
+alpha6 <- c(6,4, 3,4, 2,6)
+alpha4 <- c(10, 9, 6, 4)
 ```
 
 ```{r try_it_basic, cache = T}
-irv_out <- event_probabilities_from_event_list(event_list = irv_events, alpha = rep(5, 6), cand_names = c("a", "b", "c"))
+# chang
+irv_out <- event_probabilities_from_event_list(event_list = irv_events, alpha = alpha6, cand_names = c("a", "b", "c"))
 
-plurality_out <- event_probabilities_from_event_list(event_list = el, alpha = c(10, 9, 6, 4), cand_names = c("a", "b", "c", "d"), ordinal = F)
+plurality_out <- event_probabilities_from_event_list(event_list = el, alpha = alpha4, cand_names = c("a", "b", "c", "d"), ordinal = F)
 
-borda_out <- event_probabilities_from_event_list(event_list = borda_events, alpha = rep(5, 6), cand_names = c("a", "b", "c"), ordinal = T)
+borda_out <- event_probabilities_from_event_list(event_list = borda_events, alpha = alpha6, cand_names = c("a", "b", "c"), ordinal = T)
+```
+
+
+```{r try_it_skip, cache = T}
+# chang
+irv_out_s <- event_probabilities_from_event_list(event_list = irv_events, alpha = alpha6, cand_names = c("a", "b", "c"), skip_non_pivot_events = T)
+
+plurality_out_s <- event_probabilities_from_event_list(event_list = el, alpha = alpha4, cand_names = c("a", "b", "c", "d"), ordinal = F, skip_non_pivot_events = T)
+
+borda_out_s <- event_probabilities_from_event_list(event_list = borda_events, alpha = alpha6, cand_names = c("a", "b", "c"), ordinal = T, skip_non_pivot_events = T)
+```
+
+```{r try_it_skip_merge, cache = T}
+# change it 
+irv_out_sm <- event_probabilities_from_event_list(event_list = irv_events, alpha = alpha6, cand_names = c("a", "b", "c"), skip_non_pivot_events = T, merge_adjacent_pivot_events = T)
+
+plurality_out_sm <- event_probabilities_from_event_list(event_list = el, alpha = alpha4, cand_names = c("a", "b", "c", "d"), ordinal = F, skip_non_pivot_events = T, merge_adjacent_pivot_events = T)
+
+borda_out_sm <- event_probabilities_from_event_list(event_list = borda_events, alpha = alpha6, cand_names = c("a", "b", "c"), ordinal = T, skip_non_pivot_events = T, merge_adjacent_pivot_events = T)
 ```
 
 
 ```{r try_it_drop_skip, cache = T}
-irv_out <- event_probabilities_from_event_list(event_list = irv_events, alpha = rep(5, 6), cand_names = c("a", "b", "c"), drop_dimension = T, skip_non_pivot_events = T)
+# change it
+irv_out_ds <- event_probabilities_from_event_list(event_list = irv_events, alpha = alpha6, cand_names = c("a", "b", "c"), drop_dimension = T, skip_non_pivot_events = T)
 
-plurality_out <- event_probabilities_from_event_list(event_list = el, alpha = c(10, 9, 6, 4), cand_names = c("a", "b", "c", "d"), ordinal = F, drop_dimension = T, skip_non_pivot_events = T)
+plurality_out_ds <- event_probabilities_from_event_list(event_list = el, alpha = alpha4, cand_names = c("a", "b", "c", "d"), ordinal = F, drop_dimension = T, skip_non_pivot_events = T)
 
-borda_out <- event_probabilities_from_event_list(event_list = borda_events, alpha = rep(5, 6), cand_names = c("a", "b", "c"), ordinal = T, drop_dimension = T, skip_non_pivot_events = T)
+borda_out_ds <- event_probabilities_from_event_list(event_list = borda_events, alpha = alpha6, cand_names = c("a", "b", "c"), ordinal = T, drop_dimension = T, skip_non_pivot_events = T)
 ```
 
+```{r try_it_drop_skip_merge, cache = T}
+# change
+irv_out_dsm <- event_probabilities_from_event_list(event_list = irv_events, alpha = alpha6, cand_names = c("a", "b", "c"), drop_dimension = T, skip_non_pivot_events = T, merge_adjacent_pivot_events = T)
+
+plurality_out_dsm <- event_probabilities_from_event_list(event_list = el, alpha = alpha4, cand_names = c("a", "b", "c", "d"), ordinal = F, drop_dimension = T, skip_non_pivot_events = T, merge_adjacent_pivot_events = T)
+
+borda_out_dsm <- event_probabilities_from_event_list(event_list = borda_events, alpha = alpha6, cand_names = c("a", "b", "c"), ordinal = T, drop_dimension = T, skip_non_pivot_events = T, merge_adjacent_pivot_events = T)
+```
+
+```{r check_time}
+
+tibble(system = c(rep("plurality4", 5), rep("irv", 5), rep("borda", 5)),
+       type = rep(c("plain", "skip", "skipmerge", "dropskip", "dropskipmerge"), 3),
+       time = c(plurality_out$total$seconds_elapsed,
+                plurality_out_s$total$seconds_elapsed,
+                plurality_out_sm$total$seconds_elapsed,
+                plurality_out_ds$total$seconds_elapsed,
+                plurality_out_dsm$total$seconds_elapsed,
+                irv_out$total$seconds_elapsed,
+                irv_out_s$total$seconds_elapsed,
+                irv_out_sm$total$seconds_elapsed,
+                irv_out_ds$total$seconds_elapsed,
+                irv_out_dsm$total$seconds_elapsed,
+                borda_out$total$seconds_elapsed,
+                borda_out_s$total$seconds_elapsed,
+                borda_out_sm$total$seconds_elapsed,
+                borda_out_ds$total$seconds_elapsed,
+                borda_out_dsm$total$seconds_elapsed)) %>% 
+  pivot_wider(names_from = type, values_from = time) %>% 
+  knitr::kable() 
+```
+
+Let's also look at the results! 
+
+
+```{r look_at_results}
+show_results <- function(base_name = "borda_out"){
+  out <- get(base_name)
+  out_s <- get(paste0(base_name, "_s"))
+  out_sm <- get(paste0(base_name, "_sm"))
+  out_ds <- get(paste0(base_name, "_ds"))
+  out_dsm <- get(paste0(base_name, "_dsm"))
+  tibble(pp = names(out), 
+         base = map(out, "integral")) %>% 
+    left_join(tibble(pp = names(out_s), 
+                     skip = map(out_s, "integral")), by = "pp") %>% 
+    left_join(tibble(pp = names(out_sm), 
+                     skipmerge = map(out_sm, "integral")), by = "pp") %>%
+    left_join(tibble(pp = names(out_ds), 
+                     dropskip = map(out_ds, "integral")), by = "pp") %>%
+    left_join(tibble(pp = names(out_dsm), 
+                     dropskipmerge = map(out_dsm, "integral")), by = "pp") %>%
+        knitr::kable()
+}
+```
+
+```{r look_at_it_really}
+show_results("plurality_out") # perfect. 
+
+show_results("borda_out") # fine, although my scaling factor is off again sqrt(3) too large when dropping a dimension! will have to investigate again. 
+
+show_results("irv_out") # this is completely fucked up. 
+# on base, we get an NA on a_b|ab and similar (but not a_b|cb and similar). consistent with: an error in the event_list. but then when we drop a dimension we *do* get something there. 
+# very confusing that base is fine except for a_b|ab and dropskipmerge is fine for everything. suggests an error with specification of a_b|ab that doesn't matter once we drop a dimension.
+# very confusing that in conjunction with this skipmerge is all NAs.  
+
+
+```
+
+```{r look_at_it_raw_dawg}
+irv_out
+irv_out_sm
+```
