@@ -1,14 +1,14 @@
 # I think this is the way forward.
 
-event_probabilities_from_event_list <- function(event_list = NULL, alpha = NULL, mu = NULL, precision = NULL, sigma = NULL, sims = NULL, draw_sims = F, num_sims = 100000, cand_names = NULL, ordinal = T, drop_dimension = F, merge_adjacent_pivot_events = F, skip_non_pivot_events = F, store_time = T, ...){
+event_probabilities_from_event_list <- function(event_list = NULL, alpha = NULL, mu = NULL, precision = NULL, sigma = NULL, sims = NULL, draw_sims = F, num_sims = 100000, cand_names = NULL, ordinal = T, drop_dimension = F, merge_adjacent_pivot_events = F, skip_non_pivot_events = F, skip_compound_pivot_events = F, store_time = T, maxEvals = 100000, tol = .01, ...){
+
+  # start the clock
+  time_start <- Sys.time()
 
   if(is.null(event_list)){stop("You have to pass an event_list.")}
 
   # storage for output
   out <- list()
-
-  # start the clock
-  time_start <- Sys.time()
 
   if(is.null(sims)){
     # figure out the distribution from the parameters
@@ -91,6 +91,8 @@ event_probabilities_from_event_list <- function(event_list = NULL, alpha = NULL,
       non_pivot_event <- this_P %>% apply(1, mean) %>% max() == 1
       if(skip_non_pivot_events & non_pivot_event){next}
 
+      if(skip_compound_pivot_events | (drop_dimension & length(event_list[[names(event_list)[el_index]]]$rows_to_alter) > 1)){next}
+
       # start the clock
       this_time_start <- Sys.time()
 
@@ -156,18 +158,18 @@ event_probabilities_from_event_list <- function(event_list = NULL, alpha = NULL,
         if(class(this_S) == "matrix" && ncol(this_S) == 1){
           out[[specific_event_name]] <- list(integral = gtools::ddirichlet(as.vector(this_S), alpha[ballot_order])/sqrt(length(alpha)), functionEvaluations = 1, message = "OK")
         }else{
-          out[[specific_event_name]] <- SimplicialCubature::adaptIntegrateSimplex(f = dirichlet_for_integration, S = this_S, alpha = alpha[ballot_order], ...)
+          out[[specific_event_name]] <- SimplicialCubature::adaptIntegrateSimplex(f = dirichlet_for_integration, S = this_S, alpha = alpha[ballot_order], maxEvals = maxEvals, tol = tol, ...)
         }
       }else if(distribution == "logisticnormal"){
         if(class(this_S) == "matrix" && ncol(this_S) == 1){
           out[[specific_event_name]] <- list(integral = dlogisticnormal(as.vector(this_S), mu[ballot_order], sigma[ballot_order, ballot_order])/sqrt(length(mu)), functionEvaluations = 1, message = "OK")
         }else{
-          out[[specific_event_name]] <- SimplicialCubature::adaptIntegrateSimplex(f = logisticnormal_for_integration, S = this_S, mu = mu[ballot_order], sigma = sigma[ballot_order, ballot_order], ...)
+          out[[specific_event_name]] <- SimplicialCubature::adaptIntegrateSimplex(f = logisticnormal_for_integration, S = this_S, mu = mu[ballot_order], sigma = sigma[ballot_order, ballot_order], maxEvals = maxEvals, tol = tol, ...)
         }
       }
 
-      # when we drop a dimension we need to scale the integral by the area we have lost
-      if(drop_dimension){
+      # when we drop a dimension we may need to scale the integral by the area we have lost
+      if(drop_dimension & !is.null(event_list[[generic_event_name]]$scaling_factor)){
         out[[specific_event_name]]$integral <- out[[specific_event_name]]$integral*event_list[[generic_event_name]]$scaling_factor
       }
 

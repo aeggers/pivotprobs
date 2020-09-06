@@ -15,7 +15,6 @@ plurality_event_list <- function(n = 1000, k = 4, max_pivot_event_degree = 2){
   el[["i_"]] <- list(
     conditions = win_conditions,
     rows_to_alter = c(),
-    scaling_factor = 1,
     P = win_P
   )
 
@@ -56,7 +55,6 @@ positional_event_list <- function(n = 1000, s = .5){
     conditions = rbind(c(1-s, 1, s-1, -1, s, -s, 1/n),  # i scores above j
                      c(1, 1-s, s, -s, s-1, -1, 1/n)),   # i scores above k
     rows_to_alter = c(),
-    scaling_factor = 1,
     P = rbind(rep(1, 6), 0, 0, 0)
     )
 
@@ -75,9 +73,9 @@ positional_event_list <- function(n = 1000, s = .5){
   el
 }
 
-irv_event_list <- function(n = 1000){
+irv_event_list <- function(n = 1000, s = 0){
 
-  # eventually good to make the first round positional
+  # first round is positional, so could be Borda Count, plurality, anti-plurality, etc
 
   irv_events <- list()
 
@@ -86,7 +84,6 @@ irv_event_list <- function(n = 1000){
                        c(0,0,1,1,-1,-1,1/n),    # so does j
                        c(1,1,-1,-1,1,-1, 1/n)), # i beats j in second round
     rows_to_alter = c(),
-    scaling_factor = 1,
     P = rbind(rep(1, 6), 0, 0, 0)
   )
 
@@ -105,27 +102,27 @@ irv_event_list <- function(n = 1000){
                        c(1,-1,1,1,-1,-1, 1/n)),   # j beats k in second round
     rows_to_alter = c(3),                         # i barely beats j in first round
     scaling_factor = 1/(2*n), # not sure about this -- will have to find out
-    P = rbind(c(1,1,0,0,1,1), c(0,0,1,1,0,0), 0),
+    P = rbind(c(1,1,s,0,1,1-s), c(0,0,1-s,1,0,s), 0),
     adjacent_events = "j_i|ji")
 
   i_j_ik_conditions <- irv_events[["i_j|ij"]]$conditions
-  i_j_ik_conditions[5,] <- -i_j_ik_conditions[5,]
+  i_j_ik_conditions[5,1:6] <- -i_j_ik_conditions[5,1:6] # reverse the j k ordering
 
   irv_events[["i_j|ik"]] <- list(
     conditions = i_j_ik_conditions,
     rows_to_alter = c(3),
     scaling_factor = 1/(2*n), # not sure about this -- will have to find out
-    P = rbind(c(1,1,1,1,0,0), 0, c(0,0,0,0,1,1)),
+    P = rbind(c(1,1,s,0,1,1-s), 0, c(0,0,1-s,1,0,s)),
     adjacent_events = "j_i|ki")
 
   i_j_kj_conditions <- irv_events[["i_j|ij"]]$conditions
-  i_j_kj_conditions[4,] <- -i_j_ik_conditions[4,]
+  i_j_kj_conditions[4,1:6] <- -i_j_kj_conditions[4,1:6]  # reverse the i k ordering
 
   irv_events[["i_j|kj"]] <- list(
     conditions = i_j_kj_conditions,
     rows_to_alter = c(3),
     scaling_factor = 1/(2*n), # not sure about this -- will have to find out
-    P = rbind(0, c(0,0,1,1,0,0), c(1,1,0,0,1,1)),
+    P = rbind(0, c(0,0,1-s,1,0,s), c(1,1,s,0,1,1-s)),
     adjacent_events = "j_i|jk")
 
   irv_events

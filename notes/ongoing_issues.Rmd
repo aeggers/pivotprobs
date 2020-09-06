@@ -106,19 +106,16 @@ I have undertaken a new approach that I think is really promising. Each event is
 Done: 
 - define adjacent events in the spec and update code to do this: if we are merging adjacent pivot events, and if this one has one specified, then substitute ijk in the same way, check if that one is already stored, and if so take it out, stick it in, move on. 
 - write a function to make plurality events given n and k
-
+- make the scaling factor 1 by default, and only specify it otherwise
+- make IRV function that takes n and s, with the first round being any positional method 
 
 To do on this: 
 
-- seems like they're not merging -- diagnose and fix.
-- add simulation method, also based on conditions 
-- check if the answers are correct 
+- add simulation method, also based on conditions. 
 - check also that, when integral should be higher this side of the boundary, we get about the same result for merge_adjacent_pivot_events whether or not we drop_dimension, and the one on this side of the boundary is higher when we do not  merge_adjacent_pivot_events
-- make the scaling factor 1 by default, and only specify it otherwise
-- make IRV function that takes n and s, with the first round being any positional method 
 - decide how to store the events as part of the package -- that's data. 
-- add Kemeny
-- for each method, check the results with and without drop_dimension. this will help me pick a scaling factor. (see positional_utils.R code for this.)
+- add Kemeny.
+- for each method, check the results with and without drop_dimension to get the correct scaling factor
 
 Here's some testing of it:
 
@@ -132,50 +129,56 @@ alpha4 <- c(10, 9, 6, 4)
 ```
 
 ```{r try_it_basic, cache = T}
-# chang
-irv_out <- event_probabilities_from_event_list(event_list = irv_events, alpha = alpha6, cand_names = c("a", "b", "c"))
+# change it X
+irv_out <- event_probabilities_from_event_list(event_list = irv_events, alpha = alpha6, cand_names = c("a", "b", "c"), tol = .1)
 
-plurality_out <- event_probabilities_from_event_list(event_list = el, alpha = alpha4, cand_names = c("a", "b", "c", "d"), ordinal = F)
+plurality_out <- event_probabilities_from_event_list(event_list = el, alpha = alpha4, cand_names = c("a", "b", "c", "d"), ordinal = F, tol = .1)
 
-borda_out <- event_probabilities_from_event_list(event_list = borda_events, alpha = alpha6, cand_names = c("a", "b", "c"), ordinal = T)
+borda_out <- event_probabilities_from_event_list(event_list = borda_events, alpha = alpha6, cand_names = c("a", "b", "c"), ordinal = T, tol = .1)
 ```
 
 
 ```{r try_it_skip, cache = T}
-# chang
-irv_out_s <- event_probabilities_from_event_list(event_list = irv_events, alpha = alpha6, cand_names = c("a", "b", "c"), skip_non_pivot_events = T)
+# change it X
+irv_out_s <- event_probabilities_from_event_list(event_list = irv_events, alpha = alpha6, cand_names = c("a", "b", "c"), skip_non_pivot_events = T, tol = .1)
 
-plurality_out_s <- event_probabilities_from_event_list(event_list = el, alpha = alpha4, cand_names = c("a", "b", "c", "d"), ordinal = F, skip_non_pivot_events = T)
+plurality_out_s <- event_probabilities_from_event_list(event_list = el, alpha = alpha4, cand_names = c("a", "b", "c", "d"), ordinal = F, skip_non_pivot_events = T, tol = .1)
 
-borda_out_s <- event_probabilities_from_event_list(event_list = borda_events, alpha = alpha6, cand_names = c("a", "b", "c"), ordinal = T, skip_non_pivot_events = T)
+borda_out_s <- event_probabilities_from_event_list(event_list = borda_events, alpha = alpha6, cand_names = c("a", "b", "c"), ordinal = T, skip_non_pivot_events = T, tol = .1)
 ```
 
 ```{r try_it_skip_merge, cache = T}
-# change it 
-irv_out_sm <- event_probabilities_from_event_list(event_list = irv_events, alpha = alpha6, cand_names = c("a", "b", "c"), skip_non_pivot_events = T, merge_adjacent_pivot_events = T)
+# change X
+irv_out_sm <- event_probabilities_from_event_list(event_list = irv_events, alpha = alpha6, cand_names = c("a", "b", "c"), skip_non_pivot_events = T, merge_adjacent_pivot_events = T, tol = .1)
 
-plurality_out_sm <- event_probabilities_from_event_list(event_list = el, alpha = alpha4, cand_names = c("a", "b", "c", "d"), ordinal = F, skip_non_pivot_events = T, merge_adjacent_pivot_events = T)
+plurality_out_sm <- event_probabilities_from_event_list(event_list = el, alpha = alpha4, cand_names = c("a", "b", "c", "d"), ordinal = F, skip_non_pivot_events = T, merge_adjacent_pivot_events = T, tol = .1)
 
-borda_out_sm <- event_probabilities_from_event_list(event_list = borda_events, alpha = alpha6, cand_names = c("a", "b", "c"), ordinal = T, skip_non_pivot_events = T, merge_adjacent_pivot_events = T)
+borda_out_sm <- event_probabilities_from_event_list(event_list = borda_events, alpha = alpha6, cand_names = c("a", "b", "c"), ordinal = T, skip_non_pivot_events = T, merge_adjacent_pivot_events = T, tol = .1)
 ```
 
 
 ```{r try_it_drop_skip, cache = T}
-# change it
-irv_out_ds <- event_probabilities_from_event_list(event_list = irv_events, alpha = alpha6, cand_names = c("a", "b", "c"), drop_dimension = T, skip_non_pivot_events = T)
+# change it X
+irv_out_ds <- event_probabilities_from_event_list(event_list = irv_events, alpha = alpha6, cand_names = c("a", "b", "c"), drop_dimension = T, skip_non_pivot_events = T, tol = .1)
 
-plurality_out_ds <- event_probabilities_from_event_list(event_list = el, alpha = alpha4, cand_names = c("a", "b", "c", "d"), ordinal = F, drop_dimension = T, skip_non_pivot_events = T)
+plurality_out_ds <- event_probabilities_from_event_list(event_list = el, alpha = alpha4, cand_names = c("a", "b", "c", "d"), ordinal = F, drop_dimension = T, skip_non_pivot_events = T, tol = .1)
 
-borda_out_ds <- event_probabilities_from_event_list(event_list = borda_events, alpha = alpha6, cand_names = c("a", "b", "c"), ordinal = T, drop_dimension = T, skip_non_pivot_events = T)
+borda_out_ds <- event_probabilities_from_event_list(event_list = borda_events, alpha = alpha6, cand_names = c("a", "b", "c"), ordinal = T, drop_dimension = T, skip_non_pivot_events = T, tol = .1)
 ```
 
+
+```{r and_again, cache = T}
+plurality_out_ds <- event_probabilities_from_event_list(event_list = el, alpha = alpha4, cand_names = c("a", "b", "c", "d"), ordinal = F, skip_non_pivot_events = T, drop_dimension = T, tol = .1)
+```
+
+
 ```{r try_it_drop_skip_merge, cache = T}
-# change
-irv_out_dsm <- event_probabilities_from_event_list(event_list = irv_events, alpha = alpha6, cand_names = c("a", "b", "c"), drop_dimension = T, skip_non_pivot_events = T, merge_adjacent_pivot_events = T)
+# change X
+irv_out_dsm <- event_probabilities_from_event_list(event_list = irv_events, alpha = alpha6, cand_names = c("a", "b", "c"), drop_dimension = T, skip_non_pivot_events = T, merge_adjacent_pivot_events = T, tol = .1)
 
-plurality_out_dsm <- event_probabilities_from_event_list(event_list = el, alpha = alpha4, cand_names = c("a", "b", "c", "d"), ordinal = F, drop_dimension = T, skip_non_pivot_events = T, merge_adjacent_pivot_events = T)
+plurality_out_dsm <- event_probabilities_from_event_list(event_list = el, alpha = alpha4, cand_names = c("a", "b", "c", "d"), ordinal = F, drop_dimension = T, skip_non_pivot_events = T, merge_adjacent_pivot_events = T, tol = .1)
 
-borda_out_dsm <- event_probabilities_from_event_list(event_list = borda_events, alpha = alpha6, cand_names = c("a", "b", "c"), ordinal = T, drop_dimension = T, skip_non_pivot_events = T, merge_adjacent_pivot_events = T)
+borda_out_dsm <- event_probabilities_from_event_list(event_list = borda_events, alpha = alpha6, cand_names = c("a", "b", "c"), ordinal = T, drop_dimension = T, skip_non_pivot_events = T, merge_adjacent_pivot_events = T, tol = .1)
 ```
 
 ```{r check_time}
@@ -236,6 +239,57 @@ show_results("irv_out") # this is completely fucked up.
 # very confusing that in conjunction with this skipmerge is all NAs.  
 
 
+```
+
+Checking plurality scaling factors. 
+
+```{r plurality_calcs, cache = T}
+# x
+plurality_3 <- event_probabilities_from_event_list(event_list = plurality_event_list(k = 3), alpha = c(10, 8, 4), cand_names = c("a", "b", "c"), ordinal = F, tol = .1, skip_non_pivot_events = T)
+plurality_3_drop <- event_probabilities_from_event_list(event_list = plurality_event_list(k = 3), alpha = c(10, 8, 4), cand_names = c("a", "b", "c"), ordinal = F, tol = .1, skip_non_pivot_events = T, drop_dimension = T)
+```
+
+```{r check_it_fucker}
+n <- 1000
+
+el <- plurality_event_list(k = 4, n = n)
+S_array_from_inequalities_and_conditions(el[["i_jk"]]$conditions, rows_to_alter = c(1,2), limits = c(0, 1/n)) # this works 
+S_array_from_inequalities_and_conditions(el[["i_jk"]]$conditions, rows_to_alter = c(1,2), limits = c(0, 0), drop_dimension = T) # This works. There are no whole simplices where the conditions are met, but we have two vertices where they meet and we stick them together.  
+
+
+el <- plurality_event_list(k = 5, n = n)
+S_array_from_inequalities_and_conditions(el[["i_jk"]]$conditions, rows_to_alter = c(1,2), limits = c(0, 1/n)) # this works 
+S_array_from_inequalities_and_conditions(el[["i_jk"]]$conditions, rows_to_alter = c(1,2), limits = c(0, 0), drop_dimension = T) # Initially had an error -- was not finding any simplices to integrate over. 
+
+```
+
+```{r how_about_5, cache = T}
+# x
+plurality_5 <- event_probabilities_from_event_list(event_list = plurality_event_list(k = 5), alpha = c(10, 8, 6,  4, 2), cand_names = c("a", "b", "c", "d", "e"), ordinal = F, tol = .1, skip_non_pivot_events = T)
+plurality_5_drop <- event_probabilities_from_event_list(event_list = plurality_event_list(k = 5), alpha = c(10, 8, 6, 4, 2), cand_names = c("a", "b", "c", "d", "e"), ordinal = F, tol = .1, skip_non_pivot_events = T, drop_dimension = T)
+```
+
+```{r how_about_6, cache = T}
+# x
+plurality_6 <- event_probabilities_from_event_list(event_list = plurality_event_list(k = 6), alpha = c(13, 10, 8, 6,  4, 2), cand_names = c("a", "b", "c", "d", "e", "f"), ordinal = F, tol = .1, skip_non_pivot_events = T)
+plurality_6_drop <- event_probabilities_from_event_list(event_list = plurality_event_list(k = 6), alpha = c(13, 10, 8, 6, 4, 2), cand_names = c("a", "b", "c", "d", "e", "f"), ordinal = F, tol = .1, skip_non_pivot_events = T, drop_dimension =T)
+```
+
+```{r plurality_checks}
+compare_results <- function(x, y){
+  tibble(pp = names(x), 
+         no_drop = map(x, "integral")) %>%
+    unnest(no_drop) %>% 
+    left_join(tibble(pp = names(y), 
+                     drop = map(y, "integral")) %>% unnest(drop), by = "pp") %>%
+    filter(pp != "total") %>% 
+    mutate(ratio = drop/no_drop) %>% 
+    knitr::kable()
+}
+
+compare_results(plurality_3, plurality_3_drop)
+compare_results(plurality_out_s, plurality_out_ds)
+compare_results(plurality_5, plurality_5_drop)
 ```
 
 ```{r look_at_it_raw_dawg}

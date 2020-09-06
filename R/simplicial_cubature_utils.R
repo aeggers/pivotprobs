@@ -3,10 +3,9 @@
 # This is the key function.
 S_array_from_inequalities_and_conditions <- function(inequality_mat, rows_to_alter = c(NULL), drop_dimension = F, limits = c(0,NULL), epsilon = 1.0e-10, qhull_options = NULL){
 
-  # I don't think this error was necessary.
-  #if(drop_dimension & is.null(rows_to_alter)){
-  #  stop("With drop_dimension = T you must provide rows_to_alter.")
-  #}
+  if(drop_dimension & length(rows_to_alter) > 1){
+    warning("Results are unreliable when dropping a dimension on a compound pivot event (i.e. when multiple rows_to_alter).")
+  }
 
   # reformat the inequality matrix  and add the simplex constraints ####
   a1_mat <- inequality_mat[ ,-ncol(inequality_mat)]
@@ -61,23 +60,17 @@ S_array_from_inequalities_and_conditions <- function(inequality_mat, rows_to_alt
     if(!is.matrix(condition_matrix)){
       condition_matrix <- matrix(condition_matrix, nrow = length(rows_to_alter), ncol = ncol(inequality_mat) - 1)
     }
-    deviations <- all_vertices %*% t(condition_matrix) - matrix(inequality_mat[rows_to_alter,ncol(inequality_mat)], nrow = nrow(all_vertices), ncol = length(rows_to_alter), byrow = T)
+    deviations <- all_vertices %*% t(condition_matrix) - matrix(inequality_mat[rows_to_alter,ncol(inequality_mat)], nrow = nrow(all_vertices), ncol = length(rows_to_alter), byrow = T) # one column per condition that is supposed to be satisfied with equality
     vertices_satisfying_conditions <- which(apply(abs(deviations) < epsilon, 1, all))
 
     if(length(vertices_satisfying_conditions) == 0){
       # the conditions don't apply at of these vertices
       stop("The conditions supplied are not met at any vertex of the convex hull of the inequality matrix supplied.")
-    }else if(length(vertices_satisfying_conditions) < ncol(tch)){
-      # the conditions won't apply on any facet of the convex hull -- e.g. if k=3 they apply only a point; at k = 4 they apply along a line .
-      # we can integrate along lines (not points). We return the result.
-      this <- all_vertices[vertices_satisfying_conditions,]
-      if(!is.matrix(this)){this <- matrix(this, nrow = 1)}
-      return(t(this))
     }
 
   }
 
-  #### organize the relevant simplices in an S array ####
+  #### locate the relevant simplices and organize in an S array ####
 
   # pivot longer, making the simplex the group
   data.frame(tch) %>%
@@ -88,6 +81,17 @@ S_array_from_inequalities_and_conditions <- function(inequality_mat, rows_to_alt
     # and select simplices satisfying conditions (if relevant)
     filter(sum(!vertex %in% vertices_satisfying_conditions) == 0) -> simplex_vertex
 
+  # if we are dropping a dimension on a compound event, sometimes we don't get any simplices
+  if(nrow(simplex_vertex) == 0){
+  # This happens when the conditions don't apply on any facet of the convex hull.
+  # e.g. if k=3 a three-way tie happens at a point; at k = 4 a three-way tie happens on a line; at k = 5  it happens on a space spanned by 4 points.
+  # when k=3 or k=4 we can just return the result as a matrix and it works. but for k=5, integrating on this gives us 0. so in the main code we do not allow dropping a dimension with more than one equality.
+    this <- all_vertices[vertices_satisfying_conditions,]
+    if(!is.matrix(this)){this <- matrix(this, nrow = 1)}
+    return(t(this))
+  }
+
+  # otherwise we need to organize into an S array -- a bit tedious and messy code.
   all_vertices_df <- data.frame(vertex = 1:nrow(all_vertices), all_vertices)
 
   simplex_vertex %>%
