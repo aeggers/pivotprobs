@@ -108,16 +108,87 @@ Done:
 - write a function to make plurality events given n and k
 - make the scaling factor 1 by default, and only specify it otherwise
 - make IRV function that takes n and s, with the first round being any positional method 
+- add simulation method, also based on conditions. 
 
 To do on this: 
 
-- add simulation method, also based on conditions. 
+- check IRV function: via simulation, not getting any hits for i_j|ij and I can't see why not. 
+- work out scaling factors for simulation vs exact. 
 - check also that, when integral should be higher this side of the boundary, we get about the same result for merge_adjacent_pivot_events whether or not we drop_dimension, and the one on this side of the boundary is higher when we do not  merge_adjacent_pivot_events
 - decide how to store the events as part of the package -- that's data. 
 - add Kemeny.
 - for each method, check the results with and without drop_dimension to get the correct scaling factor
+- put in Eggers Vivyan, check against "truth": show it is least correct for even race. 
+- put in Eggers Nowacki, check: should be correct and MUCH faster. 
+- consider putting ordinal flag in event_list. 
+- why NaNs produced in log()
 
 Here's some testing of it:
+
+```{r compare_function}
+compare_results <- function(x, y){
+  tibble(pp = names(x), 
+         first = map(x, "integral")) %>%
+    unnest(first) %>% 
+    left_join(tibble(pp = names(y), 
+                     second = map(y, "integral")) %>% unnest(second), by = "pp") %>%
+    filter(pp != "total") %>% 
+    mutate(ratio = second/first) %>% 
+    knitr::kable()
+}
+```
+
+```{r check_simulation_approach}
+# xxxx
+el <- plurality_event_list(n = 1000, k = 4)
+sim_4 <- event_probabilities_from_event_list(event_list = el, ordinal = F, alpha = c(10, 7, 5, 4), draw_sims = T, cand_names = c("a", "b", "c", "d"))
+```
+
+```{r analytical_exact, cache = T}
+# 
+calc_4 <- event_probabilities_from_event_list(event_list = el, ordinal = F, alpha = c(10, 7, 5, 4), cand_names = c("a", "b", "c", "d"), tol = .001)
+```
+
+```{r compare_it}
+compare_results(calc_4, sim_4)
+```
+
+
+
+
+```{r check_simulation_approach_borda}
+# xxxx
+borda <- positional_event_list(n = 1000, s = .5)
+sim_borda <- event_probabilities_from_event_list(event_list = borda, alpha = c(10, 2, 5, 4, 3, 7), draw_sims = T, cand_names = c("a", "b", "c"))
+```
+
+```{r borda_analytical, cache = T}
+# 
+calc_borda <- event_probabilities_from_event_list(event_list = borda,  alpha = c(10, 2, 5, 4, 3, 7), cand_names = c("a", "b", "c"), tol = .1, merge_adjacent_pivot_events = T)
+```
+
+```{r compare_it_fuckr}
+compare_results(calc_borda, sim_borda)
+```
+
+
+<!-- This has to await IRV fixing.  -->
+```{r check_simulation_approach_irv}
+# xxxx
+irv <- irv_event_list(n = 1000, s = .5)
+sim_irv <- event_probabilities_from_event_list(event_list = irv, alpha = c(10, 2, 9, 2, 7, 8), draw_sims = T, cand_names = c("a", "b", "c"))
+```
+
+<!-- ```{r irv_analytical, cache = T} -->
+<!-- #  -->
+<!-- calc_irv <- event_probabilities_from_event_list(event_list = irv,  alpha = c(10, 2, 5, 4, 3, 7), cand_names = c("a", "b", "c"), tol = .1, merge_adjacent_pivot_events = T) -->
+<!-- ``` -->
+
+```{r compare_it_fuckrdoodle}
+compare_results(sim_irv, sim_irv)
+```
+
+
 
 ```{r get_events}
 el <- plurality_event_list(n = 1000, k = 4)
@@ -275,18 +346,9 @@ plurality_6 <- event_probabilities_from_event_list(event_list = plurality_event_
 plurality_6_drop <- event_probabilities_from_event_list(event_list = plurality_event_list(k = 6), alpha = c(13, 10, 8, 6, 4, 2), cand_names = c("a", "b", "c", "d", "e", "f"), ordinal = F, tol = .1, skip_non_pivot_events = T, drop_dimension =T)
 ```
 
-```{r plurality_checks}
-compare_results <- function(x, y){
-  tibble(pp = names(x), 
-         no_drop = map(x, "integral")) %>%
-    unnest(no_drop) %>% 
-    left_join(tibble(pp = names(y), 
-                     drop = map(y, "integral")) %>% unnest(drop), by = "pp") %>%
-    filter(pp != "total") %>% 
-    mutate(ratio = drop/no_drop) %>% 
-    knitr::kable()
-}
 
+
+```{r plurality_checks}
 compare_results(plurality_3, plurality_3_drop)
 compare_results(plurality_out_s, plurality_out_ds)
 compare_results(plurality_5, plurality_5_drop)

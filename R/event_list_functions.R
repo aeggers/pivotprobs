@@ -80,8 +80,8 @@ irv_event_list <- function(n = 1000, s = 0){
   irv_events <- list()
 
   irv_events[["i__j"]] <- list(
-    conditions = rbind(c(1, 1,0,0,-1,-1, 1/n),  # i beats k in first round
-                       c(0,0,1,1,-1,-1,1/n),    # so does j
+    conditions = rbind(c(1, 1-s,s,-s,s-1,-1, 1/n),  # i beats k in first round
+                       c(s,-s,1,1-s,-1,s-1,1/n),    # so does j
                        c(1,1,-1,-1,1,-1, 1/n)), # i beats j in second round
     rows_to_alter = c(),
     P = rbind(rep(1, 6), 0, 0, 0)
@@ -95,9 +95,9 @@ irv_event_list <- function(n = 1000, s = 0){
     adjacent_events = "j_i")
 
   irv_events[["i_j|ij"]] <- list(
-    conditions = rbind(c(-1, -1,0,0,1,1, 1/n),    # k beats i in first round
-                       c(0,0,-1,-1,1,1, 1/n),      # k beats j in first round
-                       c(1,1,-1,-1,0,0, 1/n),     # i beats j in first round
+    conditions = rbind(c(-1, s-1,-s,s,1-s,1, 1/n),    # k beats i in first round
+                       c(-s,s,-1,s-1,1,1-s, 1/n),      # k beats j in first round
+                       c(1-s,1,s-1,-1,s,-s, 1/n),     # i beats j in first round
                        c(1,1,1,-1,-1,-1, 1/n),    # i beats k in second round
                        c(1,-1,1,1,-1,-1, 1/n)),   # j beats k in second round
     rows_to_alter = c(3),                         # i barely beats j in first round

@@ -85,7 +85,7 @@ S_array_from_inequalities_and_conditions <- function(inequality_mat, rows_to_alt
   if(nrow(simplex_vertex) == 0){
   # This happens when the conditions don't apply on any facet of the convex hull.
   # e.g. if k=3 a three-way tie happens at a point; at k = 4 a three-way tie happens on a line; at k = 5  it happens on a space spanned by 4 points.
-  # when k=3 or k=4 we can just return the result as a matrix and it works. but for k=5, integrating on this gives us 0. so in the main code we do not allow dropping a dimension with more than one equality.
+  # when k=3 or k=4 we can just return the result as a matrix and it works. but for k=5, integrating on this gives us 0. so in the main code we do not compute compound pivot event probabilities when we drop a dimension.
     this <- all_vertices[vertices_satisfying_conditions,]
     if(!is.matrix(this)){this <- matrix(this, nrow = 1)}
     return(t(this))
