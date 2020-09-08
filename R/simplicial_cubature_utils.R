@@ -1,6 +1,6 @@
 # simplicial cubature utils
 
-# This is the key function.
+# This is the key function -- I think it is self-contained but should check
 S_array_from_inequalities_and_conditions <- function(inequality_mat, rows_to_alter = c(NULL), drop_dimension = F, limits = c(0,NULL), epsilon = 1.0e-10, qhull_options = NULL){
 
   if(drop_dimension & length(rows_to_alter) > 1){
@@ -40,6 +40,12 @@ S_array_from_inequalities_and_conditions <- function(inequality_mat, rows_to_alt
 
   # get the vertices of the convex hull from H representation
   all_vertices <- rcdd::scdd(the_Hrep)$output[,-c(1,2)]
+
+  # if user passes a set of conditions that cannot be met
+  if(nrow(all_vertices) == 0){
+    warning("The supplied conditions are not met at any vertices.")
+    return (NULL)
+  }
 
   # get the tesselated/triangulated convex hull (tch)
   # this is a matrix with one row per triangle
@@ -151,6 +157,29 @@ if(test){
   out_4 <- SimplicialCubature::adaptIntegrateSimplex(dirichlet_for_integration, this_S_4, alpha = alpha3)
   c(out_1$integral, out_2$integral, out_3$integral/(sqrt(2)*n), out_4$integral/(sqrt(2)*n))
 }
+
+
+
+
+# this also used
+P_mat_from_eppp <- function(out){
+  # thought about a dplyr way but couldn't work it out.
+  # here is a loopy way
+  P <- out[[names(out)[1]]]$P*out[[names(out)[1]]]$integral
+  for(j in 2:length(names(out))){
+    the_integral <- out[[names(out)[j]]]$integral
+    if(is.null(the_integral)){next} # "total" for example doesn't have an integral (it has "seconds_elapsed")
+    if(is.na(the_integral)){next}
+    P <- P + out[[names(out)[j]]]$P*the_integral
+  }
+  P
+}
+
+
+
+
+
+## rest is obsolete
 
 
 plurality_win_conditions <- function(k, n = 5000){
@@ -278,18 +307,6 @@ plurality_event_probabilities <- function(skip_non_pivot_events = F, merge_adjac
   out
 }
 
-P_mat_from_eppp <- function(out){
-  # thought about a dplyr way but couldn't work it out.
-  # here is a loopy way
-  P <- out[[names(out)[1]]]$W_mat*out[[names(out)[1]]]$integral
-  for(j in 2:length(names(out))){
-    the_integral <- out[[names(out)[j]]]$integral
-    if(is.null(the_integral)){next} # "total" for example doesn't have an integral (it has "seconds_elapsed")
-    if(is.na(the_integral)){next}
-    P <- P + out[[names(out)[j]]]$W_mat*the_integral
-  }
-  P
-}
 
 
 
