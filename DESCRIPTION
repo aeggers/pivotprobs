@@ -1,13 +1,23 @@
 Package: pivotprobs
 Type: Package
-Title: Methods for estimating the probability of pivot events in election models
+Title: Methods for estimating the probability of ties and other important election events.
 Version: 0.1.0
 Author: person("Eggers", "Andy", email = "aeggers@gmail.com", role = c("aut", "cre"))
 Maintainer: Andy Eggers <aeggers@gmail.com>
-Description: For studying strategic voting, voting paradoxes, and voting weights, it is useful to compute the probability of pivot events. This package contains several methods for computing pivot event probabilities in common voting systems given a model of election outcomes.
+Description: For studying strategic voting, voting paradoxes, and voting weights, it is useful to compute the probability of ties (pivot events) and other types of election results in various voting systems. This package contains methods for doing so, some of which are very general (but might be slow) and others very fast but specialized. 
 License: CC0
 Encoding: UTF-8
 LazyData: true
 RoxygenNote: 7.1.1
 Suggests: 
     testthat
+Imports:
+    SimplicialCubature,
+    gtools,
+    psychTools,
+    geometry,
+    rcdd,
+    dplyr,
+    tidyr,
+    stringr,
+    purrr

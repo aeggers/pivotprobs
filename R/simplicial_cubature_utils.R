@@ -1,4 +1,69 @@
-
+#' Converts system of inequalities into an array of simplices for integration
+#'
+#' The \code{SimplicialCubature::adaptIntegrateSimplex()} function requires an array
+#' of vertices \code{S} over which to integrate. This function produces
+#' this array from
+#' a matrix of inequalities and optional arguments specifiying alterations to
+#' these inequalities.
+#'
+#' For estimating pivot event probabilities, the general procedure is to specify
+#' a matrix of conditions under which a given candidates wins
+#' (\code{inequality_mat}) and
+#' then specify which of these conditions (\code{rows_to_alter}) should
+#' be met with near equality (\code{drop_dimension=F}) or
+#' exact equality (\code{drop_dimension=T}). The function could be used for
+#' other purposes, however.
+#'
+#' @param inequality_mat An R x C+1 matrix. Each row is an inequality of the
+#' form Ax > b. The coefficients A come from the first C columns,
+#' the constant b comes from the last column, and the x's are (in this case)
+#' the shares of each ballot. For example, if there were only two ballots
+#' and the sole condition is \code{x_1 - x_2 > .1}, \code{inequality_mat}
+#' would be \code{matrix(c(1, -1, .1), nrow = 1)}.
+#' @param rows_to_alter The indices of any rows in \code{inequality_mat} that you
+#' wish to set to equality or near-equality. To generate the \code{S} array for
+#' the plurality pivot event in which candidate 1 ties candidate 2,
+#' specify the row in  \code{inequality_mat} that indicates that candidate 1
+#' must win more than candidate 2.
+#' @param drop_dimension If \code{F} and \code{rows_to_alter} are supplied,
+#' then the inequality in \code{inequality_mat} is converted to a near inequality
+#' based on the \code{limits} and the result represents a narrow hypervolume
+#' over which to integrate. If \code{T} and \code{rows_to_alter} are supplied,
+#' then the inequality in \code{inequality_mat} is converted to a near inequality
+#' at \code{b=limits[1]} and the result represents a hyperplane over which to
+#' integrate.
+#' @param limits Determine the range within which the inequality
+#' in \code{rows_to_alter} is required to hold. If the inequality
+#' to be altered was \code{v_1 - v_2 > 0} and \code{drop_dimension=F}, the new conditions
+#' are \code{v_1 - v_2 > limits[1]} and \code{v_1 - v_2 < limits[2]}.
+#' If \code{drop_dimension=T}, the new condition is effectively
+#' \code{v_1 - v_2 = limits[1]}.
+#' @param epsilon Tolerance for determining which vertices of the convex hull
+#' defined by \code{inequality_mat} satisfy the altered conditions when
+#' \code{drop_dimension} is specified.
+#' @param qhull_options These are passed to \code{geometry::delaunayn()}
+#' and \code{geometry::convexhulln()}. See QHull documentation.
+#'
+#' @return An array of matrices, each representing one simplex. Note that
+#' each *column* of each matrix is one vertex. (You might expect rows to
+#' indicate vertices.)
+#'
+#' @examples
+#' # plurality conditions with 3 candidates
+#' n <- 1000
+#' inequality_mat <- rbind(c(1,-1,0,1/n),
+#'                         c(1,0,-1,1/n))
+#' # simplices covering region where candidate 1 wins
+#' S_array_from_inequalities_and_conditions(inequality_mat)
+#' # simplices covering region where candidate 1 finishes just ahead of candidate 2
+#' S_array_from_inequalities_and_conditions(inequality_mat,
+#'        rows_to_alter = c(1), limits = c(0, 1/n))
+#' # simplices covering facet where candidates 1 and 2 tie
+#' S_array_from_inequalities_and_conditions(inequality_mat,
+#'        rows_to_alter = c(1), drop_dimension = T, limits = c(0, 1/n))
+#'
+#'
+#' @export
 S_array_from_inequalities_and_conditions <- function(inequality_mat, rows_to_alter = c(NULL), drop_dimension = F, limits = c(0,NULL), epsilon = 1.0e-10, qhull_options = NULL){
 
   if(drop_dimension & length(rows_to_alter) > 1){
@@ -159,17 +224,4 @@ if(test){
 
 
 
-# this also used
-P_mat_from_eppp <- function(out){
-  # thought about a dplyr way but couldn't work it out.
-  # here is a loopy way
-  P <- out[[names(out)[1]]]$P*out[[names(out)[1]]]$integral
-  for(j in 2:length(names(out))){
-    the_integral <- out[[names(out)[j]]]$integral
-    if(is.null(the_integral)){next} # "total" for example doesn't have an integral (it has "seconds_elapsed")
-    if(is.na(the_integral)){next}
-    P <- P + out[[names(out)[j]]]$P*the_integral
-  }
-  P
-}
 
