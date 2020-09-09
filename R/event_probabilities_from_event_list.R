@@ -134,8 +134,11 @@ event_probabilities_from_event_list <- function(event_list, method = "sc", alpha
     cand_param_indexes <- rank(cand_vector) # this allows us to reorder the parameters correctly for this permutation, assuming parameters ranked by candidate name. e.g. "cab" -> (3, 1, 2)
     cand_order <- order(cand_vector) # this allows us to reorganize the P matrix, e.g. cab -> c(2, 3, 1)
     if(ordinal){
-      ballot_param_indexes <- ordered_ballot_vector_from_candidate_vector(cand_vector) %>% names() %>% as.numeric()   # (5, 6, 2, 1, 4, 3)
-      ballot_order <- ballot_param_indexes #TODO: fix this
+      obv <- ordered_ballot_vector_from_candidate_vector(cand_vector)  # e.g. cab, cba, acb, abc, bca, bac
+      # these are the indices for reordering the parameters such that e.g. c becomes i, a becomes j, b becomes k.
+      ballot_param_indexes <- obv %>% names() %>% as.numeric()   # (5, 6, 2, 1, 4, 3)
+      # these are the indices for reordering the ballots in the P matrix
+      ballot_order <- order(obv) #TODO: fix this
     }else{
       ballot_param_indexes <- cand_param_indexes  # (3, 1, 2)
       ballot_order <- cand_order                  # (2, 3, 1)

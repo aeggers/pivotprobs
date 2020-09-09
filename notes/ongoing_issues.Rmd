@@ -275,15 +275,18 @@ Done:
 - clean up scaling for simulation. Can think of this not as integral followed by expansion, but desired nominal width of 1/n and actual nominal width of x, so get (piw / x/(1/n)) = piw/nx. low priority. 
 - put in Eggers Vivyan, check against "truth": show it is least correct for even race. 
 - put in Eggers Nowacki, check: should be correct and MUCH faster. 
+- check and fix P matrix in ordinal methods: priority I guess. 
+- investigate testing frameworks and implement 
+
 
 To do on this: 
 
-- check and fix P matrix in ordinal methods: priority I guess. 
 - check also that, when integral should be higher this side of the boundary, we get about the same result for merge_adjacent_pivot_events whether or not we drop_dimension, and the one on this side of the boundary is higher when we do not  merge_adjacent_pivot_events
 - decide how to store the events as part of the package -- that's data. 
 - why NaNs produced in log()
 - consider allowing distinct adjacent pivot events with Eggers-Vivyan 
-- document code 
+- document and clean up code 
+- further testing.  
 
 Here's some testing of it:
 
