@@ -103,7 +103,7 @@
 #'   election_event_probabilities(method = "ev", alpha = alpha3)
 #' mc_out[["a_b"]]$integral
 #' mc_out[["a_b"]]$seconds_elapsed
-
+#' @export
 election_event_probabilities <- function(election,
                                                 method = "sc",  # sc, mc, ev, en
                                                 # distribution parameters
@@ -145,7 +145,7 @@ election_event_probabilities <- function(election,
   ordinal <- election$ordinal
   # electorate size
   if(is.null(ordinal)){stop("election$ordinal must be specified so that we know whether this is an ordinal voting method or not.")}
-  n <- event_list$n
+  n <- election$n
   if(is.null(n)){stop("election$n must be specified so that we know the electorate size (which affects limits of integration and normalization factors.")}
 
   # for the limits we define below, we want the value of one vote in terms of vote share, i.e. 1/n.
@@ -178,13 +178,13 @@ election_event_probabilities <- function(election,
       method <- "sc"
     }
   }else if(method %in% ev_method_names){
-    if(ordinal){stop("The Eggers-Vivyan method can only be used for plurality elections. Your event_list specifies an ordinal method.")}
+    if(ordinal){stop("The Eggers-Vivyan method can only be used for plurality elections. Your election argument says it is an ordinal method.")}
     if(distribution != "dirichlet"){stop("The Eggers-Vivyan method can only be used with the Dirichlet distribution. The parameters you supplied do not indicate a Dirichlet distribution.")}
     skip_compound_pivot_events <- T
     skip_non_pivot_events <- T
     merge_adjacent_pivot_events <- T # TODO: consider relaxing this.
   }else if(method %in% en_method_names){
-    if(!ordinal){stop("The Eggers-Nowacki method can only be used for IRV elections. Your event_list specifies a non-ordinal method.")}
+    if(!ordinal){stop("The Eggers-Nowacki method can only be used for IRV elections. Your election argument says it is a non-ordinal method.")}
     skip_compound_pivot_events <- T
     skip_non_pivot_events <- T
     merge_adjacent_pivot_events <- T # TODO: consider relaxing this.
@@ -326,8 +326,8 @@ election_event_probabilities <- function(election,
         if(!is.null(generic_adjacent_event_names)){
           # regularize the names
           specific_adjacent_event_names <- generic_adjacent_event_names %>%
-            map_chr(turn_generic_to_specific) %>%  # i_jk -> c_ba
-            map_chr(regularize_candidate_order_after_underscore)  # c_ba -> cab
+            purrr::map_chr(turn_generic_to_specific) %>%  # i_jk -> c_ba
+            purrr::map_chr(regularize_candidate_order_after_underscore)  # c_ba -> cab
           # Now see if any of the adjacent pivot events have already been measured
           in_out <- which(specific_adjacent_event_names %in% names(out))[1]
           if(!is.na(in_out)){

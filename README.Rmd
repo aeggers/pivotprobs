@@ -35,26 +35,37 @@ devtools::install_github("aeggers/pivotprobs")
 
 ## Example
 
-This is a basic example which shows you how to solve a common problem:
+Lots of dependencies -- you also need `rcdd` and `geometry`. 
 
-```{r example}
+```{r example, message = F}
 library(pivotprobs)
+library(dplyr)
+library(tidyr)
+library(purrr)
+library(stringr)
 
 alpha3 <- c(.4, .35, .25)*85
 plurality3 <- plurality_election(k = 3)
+
 sc_out <- plurality3 %>%
    election_event_probabilities(method = "sc", alpha = alpha3, tol = .1)
 sc_out[["a_b"]]$integral
 sc_out[["a_b"]]$seconds_elapsed
+sc_out[["a_c"]]$integral
+sc_out %>% map("seconds_elapsed") %>% unlist() %>% sum()
 
 mc_out <- plurality3 %>%
-   election_event_probabilities(method = "mc", alpha = alpha3, num_sims = 500000)
+   election_event_probabilities(method = "mc", alpha = alpha3, num_sims = 100000)
 mc_out[["a_b"]]$integral
 mc_out[["a_b"]]$seconds_elapsed
+mc_out[["a_c"]]$integral
+mc_out %>% map("seconds_elapsed") %>% unlist() %>% sum()
 
-mc_out <- plurality3 %>%
+ev_out <- plurality3 %>%
   election_event_probabilities(method = "ev", alpha = alpha3)
-mc_out[["a_b"]]$integral
-mc_out[["a_b"]]$seconds_elapsed
+ev_out[["a_b"]]$integral
+ev_out[["a_b"]]$seconds_elapsed
+ev_out[["a_c"]]$integral
+ev_out %>% map("seconds_elapsed") %>% unlist() %>% sum()
 ```
 

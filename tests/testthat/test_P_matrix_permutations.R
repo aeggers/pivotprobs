@@ -4,8 +4,8 @@ context("Permuting the P matrix")
 
 test_that("main function yields correct P matrices for plurality via EV", {
 
-  plurality_result <- plurality_event_list(k = 4) %>%
-    event_probabilities_from_event_list(method = "ev", alpha = c(12, 8, 5, 2.5))
+  plurality_result <- plurality_election(k = 4) %>%
+    election_event_probabilities(method = "ev", alpha = c(12, 8, 5, 2.5))
 
   expect_true(is.null(plurality_result[["a_"]]))
   expect_equal(plurality_result[["a_b"]]$P, rbind(c(1,0,1,1), c(0,1,0,0), 0, 0))
@@ -16,8 +16,8 @@ test_that("main function yields correct P matrices for plurality via EV", {
 
 test_that("main function yields correct P matrices for plurality via MC", {
 
-  plurality_result <- plurality_event_list(k = 4) %>%
-    event_probabilities_from_event_list(method = "mc", alpha = c(12, 8, 5, 2.5), num_sims = 10001)
+  plurality_result <- plurality_election(k = 4) %>%
+    election_event_probabilities(method = "mc", alpha = c(12, 8, 5, 2.5), num_sims = 10001)
 
   expect_equal(plurality_result[["a_"]]$P, rbind(rep(1, 4), 0, 0, 0))
   expect_equal(plurality_result[["a_b"]]$P, rbind(c(1,0,1,1), c(0,1,0,0), 0, 0))
@@ -29,8 +29,8 @@ test_that("main function yields correct P matrices for plurality via MC", {
 
 test_that("main function yields correct P matrices for irv second round pivot events via EN", {
 
-  irv_result <- irv_event_list() %>%
-    event_probabilities_from_event_list(method = "en", alpha = c(12, 8, 5, 2.5, 7, 8))
+  irv_result <- irv_election() %>%
+    election_event_probabilities(method = "en", alpha = c(12, 8, 5, 2.5, 7, 8))
 
   expect_equal(irv_result[["a_b"]]$P, rbind(c(1,1,0,0,1,0), c(0,0,1,1,0,1), 0))
   expect_equal(irv_result[["b_a"]]$P, rbind(c(1,1,0,0,1,0), c(0,0,1,1,0,1), 0))
@@ -40,8 +40,8 @@ test_that("main function yields correct P matrices for irv second round pivot ev
 
 test_that("main function yields correct P matrices for irv first round pivot events via EN", {
 
-  irv_result <- irv_event_list() %>%
-    event_probabilities_from_event_list(method = "en", alpha = c(12, 8, 5, 2.5, 7, 8))
+  irv_result <- irv_election() %>%
+    election_event_probabilities(method = "en", alpha = c(12, 8, 5, 2.5, 7, 8))
 
   expect_equal(irv_result[["a_b|ab"]]$P, rbind(c(1,1,0,0,1,1), c(0,0,1,1,0,0), 0))
   expect_equal(irv_result[["b_a|ba"]]$P, rbind(c(1,1,0,0,0,0), c(0,0,1,1,1,1), 0))
@@ -54,8 +54,8 @@ test_that("main function yields correct P matrices for irv first round pivot eve
 
 test_that("main function yields correct P matrices for all pivot events via MC", {
 
-  irv_result <- irv_event_list() %>%
-    event_probabilities_from_event_list(method = "mc", alpha = c(12, 8, 5, 2.5, 7, 8), num_sims = 10001)
+  irv_result <- irv_election() %>%
+    election_event_probabilities(method = "mc", alpha = c(12, 8, 5, 2.5, 7, 8), num_sims = 10001)
 
   expect_equal(irv_result[["a__b"]]$P, rbind(c(1,1,1,1,1,1), 0, 0))
   expect_equal(irv_result[["b__a"]]$P, rbind(0, c(1,1,1,1,1,1), 0))
