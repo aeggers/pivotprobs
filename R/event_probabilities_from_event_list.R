@@ -1,10 +1,137 @@
-event_probabilities_from_event_list <- function(event_list, method = "sc", alpha = NULL, mu = NULL, precision = NULL, sigma = NULL, sims = NULL, num_sims = 100000, sim_window = .01, cand_names = NULL, drop_dimension = F, merge_adjacent_pivot_events = F, skip_non_pivot_events = F, skip_compound_pivot_events = F, store_time = T, maxEvals = 100000, tol = .01, ev_increments = 50, en_increments_1st_round = 30, en_increments_2nd_round = 100, ...){
+#' Compute probability of election events
+#'
+#' \code{election_event_probabilities()} takes an \code{election} argument
+#' (created by e.g. \code{plurality_election()} or \code{irv_election()}) and
+#' returns a list containing, for each election event (i.e. each class of
+#' election outcomes),
+#' \itemize{
+#' \item a scalar \code{integral} indicating the probability of the event,
+#' \item a matrix \code{P}  indicating which candidate elected (rows) as a
+#' function of which extra ballot is submitted at this event (columns), and
+#' \item other objects depending on the method used to compute the event probabilities.}
+#'
+#' There are four methods for computing the probability of a given election event:
+#' \itemize{
+#' \item "sc" (or "SC" or "SimplicialCubature") partitions the election event
+#' into disjoint simplices and uses the SimplicialCubature to integrate the
+#' belief function over these simplices using the adaptive algorithm of
+#' Genz and Cools. Slow, but can be sped up  by skipping non_pivot_events
+#' (\code{skip_non_pivot_events=T}), dropping a dimension
+#' (\code{drop_dimension=T}), merging adjacent pivot events
+#' (\code{merge_adjacent_pivot_events=T}), and/or (when relevant) skipping compound
+#' pivot events (\code{skip_compound_pivot_events=T}). Currently implemented only for
+#' Dirichlet and Logistic Normal beliefs, but with some adjustment to the syntax
+#' could be extended to handle other distributions (get in touch!).
+#' \item "mc" (or "MC" or "Monte Carlo") counts the proportion of simulated elections
+#' (supplied by the user or generated from user-supplied parameters) that satisfy
+#' election event conditions. Also slow (especially with large \code{num_sums}),
+#' but like "sc" can be sped up. Can generate simulations from Dirichlet or Logistic Normal belief distributions, or can be applied to any matrix of simulated elections
+#' supplied by the user.
+#' \item "ev" (or "EV" or "Eggers-Vivyan") uses numerical integration of the
+#' Dirichlet distribution to estimate pivot event probabilities in plurality
+#' elections, making an independence assumption when there are
+#' more than four candidates. Fast but overstates the probability of low-probability
+#' events and limited to Dirichlet beliefs.
+#' \item "en" (or "EN" or "Eggers-Nowacki") uses numerical integration of the
+#' Dirichlet distribution to estimate pivot event probabilities in three-candidate
+#' IRV elections up to an arbitrary degree of precision. Fast but limited to Dirichlet beliefs.
+#' }
+#'
+#' @param election A list with elements \code{n} (electorate size), \code{ordinal}
+#'  (logical flag indicating whether it is an ordinal system or not), and \code{events}, a list of election events each with elements \code{win_conditions}, \code{tie_condition_rows}, and \code{P}. See ?event_list_functions.
+#' @param alpha Optional vector of parameters for Dirichlet distribution (one for
+#' each ballot type). In a plurality election with k candidates, should be of
+#' length k; in an ordinal system with 3 candidates, should be length 6.
+#' @param mu Optional vector of location parameters for Dirichlet distribution
+#' or logistic normal distribution.
+#' @param precision Optional scalar precision parameter for Dirichlet distribution.
+#' @param sigma Optional covariance matrix for logistic normal distribution.
+#' @param sims Optional matrix of simulated elections, one column per ballot type.
+#' @param num_sims  Optional number of simulated elections, if not
+#' provided in \code{sims}.
+#' @param sim_window Vote share discrepancy within which two candidates will be
+#' "nearly tied" for method "mc". Larger \code{sim_window} means more bias,
+#' smaller means more variance. Set to .01 by default.
+#' @param cand_names Optional vector of candidate names. If not supplied, will
+#' be "a", "b", "c", etc.
+#' @param drop_dimension Method "sc" can be sped up for pivot events by
+#' integrating the belief function on facets where one candidate is exactly
+#' 1/2n behind the other (or they are exactly tied, if \code{drop_dimension=T})
+#' rather than in the hypervolume where two candidates are nearly tied.
+#' @param merge_adjacent_pivot_events If \code{F}, method "sc" computes the probability of e.g. candidate \code{a} being just behind \code{b} and vice
+#' versa; if \code{T}, method "sc" saves time by computing the probability of candidates \code{a} and \code{b} being approximately or exactly tied (depending on \code{drop_dimension}).
+#' @param skip_non_pivot_events Set to \code{T} to avoid computing the probability
+#' of events where one vote cannot make a difference, e.g. where candidate \code{a}
+#' wins by more than one vote. Relevant for methods "sc" and "mc".
+#' @param skip_compound_pivot_events Set to \code{T} to avoid computing the probability of (near) three-way ties in plurality.
+#' @param store_time By default we store the time each computation takes, in seconds.
+#' @param maxEvals The maximum number of function evaluations to compute an
+#' integral via method "sc" (passed to
+#' \code{SimplicialCubature::adaptIntegrateSimplex()}). If this is exceeded, you still get a result, but it will not be as precise as requested.
+#' @param tol The relative error requested in computing an
+#' integral via method "sc" (passed to
+#' \code{SimplicialCubature::adaptIntegrateSimplex()}). For faster imprecise computation (e.g. for testing), set to e.g. .2.
+#' @param ev_increments Increments for numerical integration in method "ev".
+#' @param en_increments_1st_round Increments for numerical integration of
+#' first-round pivot events in method "en".
+#' @param en_increments_2nd_round Increments for numerical integration of
+#' second-round pivot events in method "en".
+#'
+#' @return A list containing one list per election event. Each of these lower-level
+#' lists contains
+ #'\itemize{
+#' \item \code{integral} the event probability
+#' \item \code{P} the election probability matrix, indicating which candidate (rows)
+#' is elected at this event depending on which extra ballot (columns) is submitted.
+#' \item \code{seconds_elapsed} the time to compute this event probability.
+#' }
+#' For method "sc" these event-specific lists include other output from \code{SimplicialCubature::adaptIntegrateSimplex()}, such as \code{functionEvaluations} and \code{message}.
+#'
+#' @examples
+#' alpha3 <- c(.4, .35, .25)*85
+#' sc_out <- plurality_election(k = 3) %>%
+#'   election_event_probabilities(method = "sc", alpha = alpha3, tol = .1)
+#' sc_out[["a_b"]]$integral
+#' sc_out[["a_b"]]$seconds_elapsed
+#'
+#' mc_out <- plurality_election(k = 3) %>%
+#'   election_event_probabilities(method = "mc", alpha = alpha3, num_sims = 500000)
+#' mc_out[["a_b"]]$integral
+#' mc_out[["a_b"]]$seconds_elapsed
+#'
+#' mc_out <- plurality_election(k = 3) %>%
+#'   election_event_probabilities(method = "ev", alpha = alpha3)
+#' mc_out[["a_b"]]$integral
+#' mc_out[["a_b"]]$seconds_elapsed
+
+election_event_probabilities <- function(election,
+                                                method = "sc",  # sc, mc, ev, en
+                                                # distribution parameters
+                                                alpha = NULL, # dirichlet
+                                                mu = NULL,  # dirichlet or logisticnormal
+                                                precision = NULL, # dirichlet
+                                                sigma = NULL, # logisticnormal
+                                                sims = NULL, # provide MC simulations
+                                                num_sims = 100000, # for drawing
+                                                sim_window = .01,
+                                                cand_names = NULL, # optional
+                                                drop_dimension = F,
+                                                merge_adjacent_pivot_events = F,
+                                                skip_non_pivot_events = F,
+                                                skip_compound_pivot_events = F,
+                                                store_time = T,
+                                                maxEvals = 100000, tol = .01, # SimplicialCubature arguments
+                                                ev_increments = 50,
+                                                en_increments_1st_round = 30,
+                                                en_increments_2nd_round = 100,
+                                                ... # other arguments to SimplicialCubature::adaptIntegrateSimplex()
+                                                ){
 
   # start the clock
   time_start <- Sys.time()
 
-  sc_method_names <- c("sc", "SC")
-  mc_method_names <- c("mc", "MC")
+  sc_method_names <- c("sc", "SC", "SimplicialCubature")
+  mc_method_names <- c("mc", "MC", "Monte Carlo")
   ev_method_names <- c("ev", "EV", "Eggers-Vivyan")
   en_method_names <- c("en", "EN", "Eggers-Nowacki")
 
@@ -12,14 +139,14 @@ event_probabilities_from_event_list <- function(event_list, method = "sc", alpha
     stop("I don't recognize the supplied method.")
   }
 
-  ## get the meta parametees from the event list
+  ## get the meta parametesr from the election object
+  if(class(election) != "list"){stop("Expection `election` (first argument) to be a list.")}
   # ballot type
-  if(is.null(event_list[["params"]])){stop("event_list must have a `params` elemwnt.")}
-  ordinal <- event_list[["params"]][["ordinal"]]
+  ordinal <- election$ordinal
   # electorate size
-  if(is.null(ordinal)){stop("event_list[['params']] must have an `ordinal` element so that we know whether this is an ordinal voting method or not.")}
-  n <- event_list[["params"]][["n"]]
-  if(is.null(n)){stop("event_list[['params']] must have an `n` element so that we know the electorate size (which affects limits of integration and normalization factors.")}
+  if(is.null(ordinal)){stop("election$ordinal must be specified so that we know whether this is an ordinal voting method or not.")}
+  n <- event_list$n
+  if(is.null(n)){stop("election$n must be specified so that we know the electorate size (which affects limits of integration and normalization factors.")}
 
   # for the limits we define below, we want the value of one vote in terms of vote share, i.e. 1/n.
   base_limit <- 1/n
@@ -143,10 +270,16 @@ event_probabilities_from_event_list <- function(event_list, method = "sc", alpha
       ballot_param_indexes <- cand_param_indexes  # (3, 1, 2)
       ballot_order <- cand_order                  # (2, 3, 1)
     }
-    for(el_index in 1:length(names(event_list))){
+
+    if(class(election$events) != "list"){
+      stop("election$events must be a list of election events.")
+    }
+
+    event_list <- election$events
+
+    for(el_index in 1:length(names(election$events))){
 
       generic_event_name <- names(event_list)[el_index]
-      if(generic_event_name == "params"){next} # params stores n and ordinal -- it's not an event.
 
       # start the clock on this election event
       this_time_start <- Sys.time()
@@ -159,7 +292,7 @@ event_probabilities_from_event_list <- function(event_list, method = "sc", alpha
       if(skip_non_pivot_events & !pivot_event){next}
 
       # we can specify skip_compound_pivot_events, i.e. those with more than one "row to alter"; we MUST skip compound pivot events when drop_dimension is TRUE.
-      if(length(this_event$rows_to_alter) > 1 & (skip_compound_pivot_events | drop_dimension )){next}
+      if(length(this_event$tie_condition_rows) > 1 & (skip_compound_pivot_events | drop_dimension )){next}
 
       # if no scaling factor is provided we set it to 1
       scaling_factor <- this_event$scaling_factor
@@ -218,7 +351,7 @@ event_probabilities_from_event_list <- function(event_list, method = "sc", alpha
           if(generic_event_name %in% names(S_list)){
             this_S <- S_list[[generic_event_name]]
           }else{
-            this_S <- S_array_from_inequalities_and_conditions(this_event$conditions, rows_to_alter = this_event$rows_to_alter, drop_dimension = drop_dimension, limits = limits)  # qhull options, epsilon
+            this_S <- S_array_from_inequalities_and_conditions(this_event$win_conditions, rows_to_alter = this_event$tie_condition_rows, drop_dimension = drop_dimension, limits = limits)  # qhull options, epsilon
             S_list[[generic_event_name]] <- this_S
           }
 
@@ -270,9 +403,9 @@ event_probabilities_from_event_list <- function(event_list, method = "sc", alpha
         }else if(method %in% mc_method_names){
           # Monte Carlo simulation
           # get the event conditions as stated in the event_list
-          this_im <- this_event$conditions
+          this_im <- this_event$win_conditions
           C_mat <- this_im[,-ncol(this_im)] # take off the vector of constants (1/n) -- we are checking Ax >= 0. Could change that -- would make a tiny difference.
-          rta <- this_event$rows_to_alter
+          rta <- this_event$tie_condition_rows
           # permute the sims -- could permute the conditions, but I can't see an advantage. (thought we could skip some computations, but there should be no repeats)
           these_sims <- sims[,ballot_param_indexes]
           # apply the conditions
@@ -301,11 +434,13 @@ event_probabilities_from_event_list <- function(event_list, method = "sc", alpha
     }
   }
 
-  if(store_time){
-    time_diff <- Sys.time() - time_start
-    units(time_diff) <- "secs"
-    out[["total"]]$seconds_elapsed <- as.double(time_diff)
-  }
+  # previously stored time, but this is ugly -- this list should just be a list of events.
+  # if(store_time){
+  #   time_diff <- Sys.time() - time_start
+  #   units(time_diff) <- "secs"
+  #   out[["total"]]$seconds_elapsed <- as.double(time_diff)
+  # }
+
   out
 
 }

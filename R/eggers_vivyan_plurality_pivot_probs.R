@@ -1,4 +1,51 @@
-# key function
+#' Fast computation of plurality pivot probabilities given Dirichlet beliefs
+#'
+#' Returns probability of a tie for first between two candidates in a
+#' k-candidate plurality election given Dirichlet beliefs, not normalized for
+#' electorate size. Uses the approximation introduced by Eggers & Vivyan (2020),
+#' which (when there are more than three candidates) involves an
+#' independence assumption on the vote shares of candidates
+#' 3 to k.
+#'
+#' The estimates are not normalized for the size of the electorate (and thus could
+#' be larger than 1). Dividing by
+#' the electorate size gives (an approximation of) the true pivot probability.
+#'
+#' Dirichlet beliefs for a k-candidate plurality election are characterized by
+#' a length-k vector \code{alpha}. It may be helpful to think of \code{alpha}
+#' as the product of a vector of expected vote shares
+#' \code{(mu_1, mu_2, ... mu_k)} and a
+#' scalar precision parameter \code{s}. Eggers & Vivyan (2020) find that the
+#' precision of UK election forecasts is characterized by \code{s=85}.
+#' So, given an expected
+#' result of \code{c(.4, .35, .25)} we might model the result by setting
+#' \code{alpha} to \code{c(.4, .35, .25)*85}.
+#'
+#' For k=3 candidates the Eggers-Vivyan method produces exact pivot probabilities
+#' (as \code{increments} goes to infinity, and after dividing by electorate size).
+#'
+#' For k>3 candidates the probability of unlikely ties for first is overstated due to
+#' the independence assumption: the probability of candidates 1 and 2 tying for first
+#' at a given vote share x is approximated by the product of
+#' \itemize{
+#' \item the probability of candidates 1 and 2 receiving vote share x
+#' \item the probability of candidate 3 receiving below x (given 1 and 2 each get x)
+#' \item the probability of candidate 4 receiving below x (given 1 and 2 each get x)
+#' \item etc up to k}
+#'
+#' @examples
+#' eggers_vivyan_probability_of_tie_for_first(c(10, 7, 5)) # non-normalized pivot prob for 3 candidates
+#' eggers_vivyan_probability_of_tie_for_first(c(10, 7, 5))/100000 # normalized for electorate size
+#' eggers_vivyan_probability_of_tie_for_first(c(10, 7, 5, 3)) # 4 candidates
+#' eggers_vivyan_probability_of_tie_for_first(c(10, 7, 5, 3), increments = 100) # more precise
+#'
+#' @param alpha Length-k parameter vector for Dirichlet belief distribution.
+#' See Details.
+#' @param increments Number of points at which to compute the probability
+#' of candidates 1 and 2 tying for first. More increments means
+#' a more precise estimate.
+#'
+#' @export
 eggers_vivyan_probability_of_tie_for_first <- function(alpha, increments = 50){
 
   boundary_points <- seq(from = 1/length(alpha), to = .5, length = increments+1) # the least a pair of parties can get and be tied for first is 1/k each. the most they can get is .5.
@@ -33,24 +80,3 @@ probability_of_tie_for_first_at_y_naive <- function(alpha, y){
   }
   list(prob.of.tie.at.y = prob.of.tie.at.y, probs.of.being.below.y = probs, probability = prod(c(prob.of.tie.at.y, probs)))
 }
-
-
-# this wraps the above function in a loop -- not using since integrated into event list approach
-eggers_vivyan_plurality_pivot_probs <- function(alpha = NULL, mu = NULL, precision = NULL, increments = 50, cand_names = NULL, sep = ""){
-  if(is.null(alpha)){
-    if(is.null(mu) | is.null(precision)){
-      stop("You must pass either 'alpha' OR 'mu' and 'precision'.")
-    }
-    alpha <- mu*precision
-  }
-  if(is.null(cand_names)){cand_names <- letters[1:3]}
-  out <- list()
-  for(i in 1:(length(alpha) - 1)){
-    for(j in (i + 1):length(alpha)){
-      out[[paste0(cand_names[i], sep, cand_names[j])]] <- probability_of_tie_for_first(alpha = c(alpha[c(i, j)], alpha[-c(i,j)]), increments = increments)$estimate # I once divided by n here -- but this can be done later.
-    }
-  }
-  out
-}
-
-

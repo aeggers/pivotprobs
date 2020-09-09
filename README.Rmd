@@ -1,0 +1,60 @@
+---
+output: github_document
+---
+
+<!-- README.md is generated from README.Rmd. Please edit that file -->
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "man/figures/README-",
+  out.width = "100%"
+)
+```
+
+# pivotprobs
+
+<!-- badges: start -->
+<!-- badges: end -->
+
+`pivotprobs` is a package for computing the probability of pivot events (election results where a single ballot can determine the winner) and other election events. 
+
+It aims to offer both general methods that can handle any voting system and belief distribution and specialized methods that handle important cases efficiently.  
+
+
+
+## Installation
+
+You can install development version from [GitHub](https://github.com/) with:
+
+``` r
+# install.packages("devtools")
+devtools::install_github("aeggers/pivotprobs")
+```
+
+## Example
+
+This is a basic example which shows you how to solve a common problem:
+
+```{r example}
+library(pivotprobs)
+
+alpha3 <- c(.4, .35, .25)*85
+plurality3 <- plurality_election(k = 3)
+sc_out <- plurality3 %>%
+   election_event_probabilities(method = "sc", alpha = alpha3, tol = .1)
+sc_out[["a_b"]]$integral
+sc_out[["a_b"]]$seconds_elapsed
+
+mc_out <- plurality3 %>%
+   election_event_probabilities(method = "mc", alpha = alpha3, num_sims = 500000)
+mc_out[["a_b"]]$integral
+mc_out[["a_b"]]$seconds_elapsed
+
+mc_out <- plurality3 %>%
+  election_event_probabilities(method = "ev", alpha = alpha3)
+mc_out[["a_b"]]$integral
+mc_out[["a_b"]]$seconds_elapsed
+```
+
