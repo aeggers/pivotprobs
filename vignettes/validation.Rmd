@@ -1,0 +1,118 @@
+---
+title: "Validating results"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{validation}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup, message = F}
+library(pivotprobs)
+library(tidyverse)
+```
+
+
+This vignette is for establishing the validity of the estimates. 
+
+
+## Convergent validity
+
+The idea here is to show that we get the same answers with distinct methods. 
+
+For all election systems we can compare the results of methods "sc" (Simplicial Cubature) and mc" (Monte Carlo) within the `election_event_probs()` function. These methods make use of the election event definitions in e.g. the `plurality_election()` function or the `irv_election()` function, but otherwise they use a different approach to computing the probability of the election event. Notably, method "mc" does not require normalization of the belief distribution function or rescaling based on dropped dimensions.
+
+For the plurality and plurality-IRV election systems (i.e. IRV where the loser of the "first round" is the one who receives the fewest first-place votes), we can compare results of methods "sc" and "mc" with methods that do not make use of the election event definitions in e.g. the `plurality_election()` function or the `irv_election()` function. In particular, for plurality we can compare the result of "sc" and "mc" methods with the result of the "ev" (Eggers-Vivyan) method, which uses numerical integration of the Dirichlet distribution and the CDF of the Beta distribution to get an approximation of pivot event probabilities. For plurality-IRV we can compare the result of "sc" and "mc" with the result of the "en" (Eggers-Nowacki) method, which also uses numerical integration of the Dirichlet distribution and the CDF of the Beta distribution to get an approximation of pivot event probabilities (which is exact as the number of increments goes to infinity). 
+
+For positional methods, we can compare the result where $s=0$ to the plurality results. We can also compare the results of methods "sc" and "mc" against a separate implementation of the Monte Carlo method (`positional_pivot_probs_from_sims()`) that does not use the election event definitions in `positional_election()`.  
+
+For the Kemeny-Young (Condorcet) method, we can compare the results of methods "sc" and "mc" against a separate implementation of the Monte Carlo method (`condorcet_pivot_probs_from_sims()`) that does not use the election event definitions in `kemeny_young_election()`.    
+
+```{r ky_sc, cache = T}
+alpha6 <- c(10, 4, 6, 7, 3, 9)
+
+kye <- kemeny_young_election(n = 1000)
+
+ky_sc <- kye %>% 
+  election_event_probs(method = "sc", alpha = alpha6, tol = .2) 
+
+ky_sc_skip_drop_merge <- kye %>% 
+  election_event_probs(method = "sc", alpha = alpha6, 
+                       skip_non_pivot_events = T,
+                       merge_adjacent_pivot_events = T, 
+                       drop_dimension = T,
+                       tol = .2) 
+```
+
+```{r ky_sims, cache = T}
+ky_sims <- kye %>% 
+  election_event_probs(method = "mc", 
+                       alpha = alpha6, 
+                       num_sims = 500000,
+                       skip_non_pivot_events = T,
+                       merge_adjacent_pivot_events = T) 
+```
+
+```{r ky_comparison}
+# x
+ky_comparison <- condorcet_pivot_probs_from_sims(
+  sims = gtools::rdirichlet(500000, alpha = alpha6), 
+  n = 1000)
+```
+
+Now how do we check that they are equal? 
+
+
+```{r check_decisive_events}
+c(ky_sc[["a_b"]]$integral,
+  ky_sc_skip_drop_merge[["a_b"]]$integral,
+  ky_sims[["a_b"]]$integral,
+  ky_comparison[["ab"]])
+
+c(ky_sc[["a_c"]]$integral,
+  ky_sc_skip_drop_merge[["a_c"]]$integral,
+  ky_sims[["a_c"]]$integral,
+  ky_comparison[["ac"]])
+
+c(ky_sc[["b_c"]]$integral,
+  ky_sc_skip_drop_merge[["b_c"]]$integral,
+  ky_sims[["b_c"]]$integral,
+  ky_comparison[["bc"]])
+
+```
+
+
+```{r check_kemeny_events}
+c(ky_sc_skip_drop_merge[["ac_ba|abca"]]$integral,
+  ky_sims[["ac_ba|abca"]]$integral,
+  ky_comparison[["ab_forward"]])
+
+c(ky_sc_skip_drop_merge[["bc_ab|bacb"]]$integral,
+  ky_sims[["bc_ab|bacb"]]$integral,
+  ky_comparison[["ab_reverse"]])
+
+c(ky_sc_skip_drop_merge[["cb_ac|cabc"]]$integral,
+  ky_sims[["cb_ac|cabc"]]$integral,
+  ky_comparison[["ac_forward"]])
+
+c(ky_sc_skip_drop_merge[["ab_ca|acba"]]$integral,
+  ky_sims[["ab_ca|acba"]]$integral,
+  ky_comparison[["ac_reverse"]])
+
+c(ky_sc_skip_drop_merge[["ba_cb|bcab"]]$integral,
+  ky_sims[["ba_cb|bcab"]]$integral,
+  ky_comparison[["bc_forward"]])
+
+c(ky_sc_skip_drop_merge[["ca_bc|cbac"]]$integral,
+  ky_sims[["ca_bc|cbac"]]$integral,
+  ky_comparison[["bc_reverse"]])
+
+
+```

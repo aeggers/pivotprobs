@@ -1,6 +1,6 @@
 #' Compute probability of election events
 #'
-#' \code{election_event_probabilities()} takes an \code{election} argument
+#' \code{election_event_probs()} takes an \code{election} argument
 #' (created by e.g. \code{plurality_election()} or \code{irv_election()}) and
 #' returns a list containing, for each election event (i.e. each class of
 #' election outcomes),
@@ -90,42 +90,42 @@
 #' @examples
 #' alpha3 <- c(.4, .35, .25)*85
 #' sc_out <- plurality_election(k = 3) %>%
-#'   election_event_probabilities(method = "sc", alpha = alpha3, tol = .1)
+#'   election_event_probs(method = "sc", alpha = alpha3, tol = .1)
 #' sc_out[["a_b"]]$integral
 #' sc_out[["a_b"]]$seconds_elapsed
 #'
 #' mc_out <- plurality_election(k = 3) %>%
-#'   election_event_probabilities(method = "mc", alpha = alpha3, num_sims = 500000)
+#'   election_event_probs(method = "mc", alpha = alpha3, num_sims = 500000)
 #' mc_out[["a_b"]]$integral
 #' mc_out[["a_b"]]$seconds_elapsed
 #'
 #' mc_out <- plurality_election(k = 3) %>%
-#'   election_event_probabilities(method = "ev", alpha = alpha3)
+#'   election_event_probs(method = "ev", alpha = alpha3)
 #' mc_out[["a_b"]]$integral
 #' mc_out[["a_b"]]$seconds_elapsed
 #' @export
-election_event_probabilities <- function(election,
-                                                method = "sc",  # sc, mc, ev, en
-                                                # distribution parameters
-                                                alpha = NULL, # dirichlet
-                                                mu = NULL,  # dirichlet or logisticnormal
-                                                precision = NULL, # dirichlet
-                                                sigma = NULL, # logisticnormal
-                                                sims = NULL, # provide MC simulations
-                                                num_sims = 100000, # for drawing
-                                                sim_window = .01,
-                                                cand_names = NULL, # optional
-                                                drop_dimension = F,
-                                                merge_adjacent_pivot_events = F,
-                                                skip_non_pivot_events = F,
-                                                skip_compound_pivot_events = F,
-                                                store_time = T,
-                                                maxEvals = 100000, tol = .01, # SimplicialCubature arguments
-                                                ev_increments = 50,
-                                                en_increments_1st_round = 30,
-                                                en_increments_2nd_round = 100,
-                                                ... # other arguments to SimplicialCubature::adaptIntegrateSimplex()
-                                                ){
+election_event_probs <- function(election,
+                                 method = "sc",  # sc, mc, ev, en
+                                 # distribution parameters
+                                 alpha = NULL, # dirichlet
+                                 mu = NULL,  # dirichlet or logisticnormal
+                                 precision = NULL, # dirichlet
+                                 sigma = NULL, # logisticnormal
+                                 sims = NULL, # provide MC simulations
+                                 num_sims = 100000, # for drawing
+                                 sim_window = .01,
+                                 cand_names = NULL, # optional
+                                 drop_dimension = F,
+                                 merge_adjacent_pivot_events = F,
+                                 skip_non_pivot_events = F,
+                                 skip_compound_pivot_events = F,
+                                 store_time = T,
+                                 maxEvals = 100000, tol = .01, # SimplicialCubature arguments
+                                 ev_increments = 50,
+                                 en_increments_1st_round = 30,
+                                 en_increments_2nd_round = 100,
+                                 ... # other arguments to SimplicialCubature::adaptIntegrateSimplex()
+                                 ){
 
   # start the clock
   time_start <- Sys.time()
@@ -210,7 +210,7 @@ election_event_probabilities <- function(election,
     }
   }
 
-  # set limits (width of integration region) based on arguments
+  # set limits (width of integration region) based on method and arguments
   if(method %in% mc_method_names){
     # in monte carlo, we check whether the key condition (e.g. v_i - v_j) is within the interval `limits``
     # typically the interval is much wider than 1/n, so we can't get distinct estimates for adjacent pivot events.
@@ -310,7 +310,7 @@ election_event_probabilities <- function(election,
       # turn generic event name (e.g. i_j) into name that corresponds to this permutation (e.g. c_a)
       specific_event_name <- generic_event_name %>%
         turn_generic_to_specific() %>%    # i_j => c_a
-        regularize_candidate_order_after_underscore()  # c_ba => c_ab, but c_ba|cb stays same (if we ever have such an event)
+        regularize_candidate_order_after_underscore()  # c_ba => c_ab, but c_ba|cb stays same
 
       # Now we check to see if we need to store this one.
       store <- TRUE
@@ -376,7 +376,6 @@ election_event_probabilities <- function(election,
             out[[specific_event_name]]$integral <- out[[specific_event_name]]$integral*(1/(n*scaling_factor))
             # note if we deal with compound events we probably have to square this.
           }
-
         }else if(method %in% ev_method_names){
           # Eggers Vivyan is easy: tie for first between first two candidates (based on alpha vector). So no information from the pivot event list necessary.
           out[[specific_event_name]] <- list(integral = eggers_vivyan_probability_of_tie_for_first(alpha = alpha[ballot_param_indexes], increments = ev_increments)$estimate*(1/(n*scaling_factor)))
@@ -434,7 +433,7 @@ election_event_probabilities <- function(election,
     }
   }
 
-  # previously stored time, but this is ugly -- this list should just be a list of events.
+  # previously stored total time, but makes the output ugly, i.e. a list of events and then total time.
   # if(store_time){
   #   time_diff <- Sys.time() - time_start
   #   units(time_diff) <- "secs"

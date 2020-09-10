@@ -1,15 +1,7 @@
+#' @export
+positional_pivot_probs_froms_sims <- function(sims, tol = .01, n = 1000, s = .5, cand_names = NULL, sep = ""){
 
-positional_piv_probs_simulation <- function(sims = NULL, alpha_vec = NULL, N = 100000, tol = .01, s = .5, cand_names = NULL, sep = ""){
-
-  if(is.null(sims)){
-    if(is.null(alpha_vec)){
-      stop("You need to pass either a matrix/df of simulations (sims) or a parameter vector to draw from a Dirichlet distribution.")
-    }
-    if(length(alpha_vec) != 6){
-      stop("The parameters for the Dirichlet draws need to be length 6.")
-    }
-    sims <- gtools::rdirichlet(N, alpha_vec)
-  }else if(ncol(sims) != 6){
+  if(ncol(sims) != 6){
     stop("sims must have 6 columns.")
   }
 
@@ -27,7 +19,7 @@ positional_piv_probs_simulation <- function(sims = NULL, alpha_vec = NULL, N = 1
   score_b <- sims[,3] + sims[,4] + s*(sims[,1] + sims[,6])
   score_c <- sims[,5] + sims[,6] + s*(sims[,2] + sims[,4])
 
-  normalization_factor <- tol # used to be tol/sqrt(3)
+  normalization_factor <- n*tol # used to be tol/sqrt(3)
   # this is direct Monte Carlo -- nothing fancy
   out <- list(
     mean(score_a > score_b & score_a - score_b < tol & score_b > score_c)/normalization_factor,

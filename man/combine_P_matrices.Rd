@@ -7,16 +7,20 @@
 combine_P_matrices(election_event_probs)
 }
 \arguments{
-\item{election_event_probs}{The output of \code{election_event_probabilities()};
+\item{election_event_probs}{The output of \code{election_event_probs()};
 a list of election events, each of which is a list with a probability
 (\code{integral}) and an event-specific P matrix (\code{P}).}
 }
 \description{
-
+Takes the output of \code{election_event_probs()} and returns a
+matrix (the P matrix) indicating the probability of each outcome (rows)
+as a function of the additional ballot (columns). If \code{u} is a vector
+of utilities (one per outcome), then t(P)%*%u gives the expected utility
+of each ballot.
 }
 \examples{
 plurality_election(k = 3) \%>\%
-   election_event_probabilities(method = "sc", alpha = c(10, 8, 5)) \%>\%
+   election_event_probs(method = "sc", alpha = c(10, 8, 5)) \%>\%
    combine_P_matrices -> P
 t(P) \%*\%  c(2, 5, 9)
 }

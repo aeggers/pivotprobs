@@ -22,20 +22,26 @@ conditions for election events in the election list
 (e.g. the region in which one
 candidate is more than one vote ahead of another).
 \code{n} is also used when computing pivot event probabilities
-from an election list in \code{election_event_probabilities()},
+from an election list in \code{election_event_probs()},
 where higher \code{n} means lower probability.}
 
 \item{k}{The number of candidates in plurality.}
+
+\item{max_pivot_event_degree}{If 1, we consider two-way (near) ties
+in plurality. If 2, we also consider three-way (near) ties.}
 
 \item{s}{The value of a second-ranking in a three-candidate
 positional election, where a top ranking is worth 1 and a bottom ranking is worth 0.}
 }
 \description{
 An election list represents an election
-in a minimal way: electorate size, ballot format, and
-rules for determining the winner, electorate size.
-It is passed to the \code{election_event_probabilities()}
-function to compute the probability of each election event.
+in a minimal way: it contains the electorate size, the ballot
+format, and a list of "election events", i.e. situations in which
+a single ballot can affect the outcome in a given way.
+An election list is passed to the
+\code{election_event_probs()}
+function to compute the probability of each election event given
+a model of voting outcomes.
 }
 \details{
 An election list contains the electorate size \code{n},
@@ -48,4 +54,36 @@ event takes place as a function of which additional ballot is submitted.}
 
 These functions produce plain lists, so functions can be written
 for further election methods.
+
+The election methods provided are:
+\itemize{
+\item \code{plurality_election()}, where each voter votes for
+one of \code{k>=3} candidates and the candidate with the most votes wins.
+\item \code{positional_election()}, where each voter ranks the
+three candidates and the candidate with the highest score wins, with
+each top ranking worth 1 point, each bottom ranking worth 0 points,
+and each middle ranking worth \code{s} points.
+For now we can only handle 3 candidates.
+(I have written code to handle more, but the QHull
+functions seem to have trouble with the geometry.)
+\item \code{irv_election()} (instant-runoff), where each voter
+ranks the three candidates and the winner is determined by a process
+of elimination. The ballots are initially tallied using a
+positional method; the most commonly used option is plurality,
+i.e. \code{s=0}.) The lowest-scoring candidate is eliminated.
+Given three candidates, the winner is then determined according
+to which of the remaining candidates is ranked higher on more
+ballots.
+\item \code{kemeny_young_election()} (maximin), where any
+candidate who defeats all others in a pairwise comparison (i.e. is ranked higher on more ballots)
+is the winner and, if there is no such candidate, the winner is the
+candidate who is defeated by the smallest margin.
+}
+}
+\examples{
+plurality_election(k = 3)
+positional_election(s = .5) # borda count
+irv_election()
+kemeny_young_election()
+
 }

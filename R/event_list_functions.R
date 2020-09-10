@@ -1,10 +1,13 @@
 #' Create election list for analysis
 #'
 #' An election list represents an election
-#' in a minimal way: electorate size, ballot format, and
-#' rules for determining the winner, electorate size.
-#' It is passed to the \code{election_event_probabilities()}
-#' function to compute the probability of each election event.
+#' in a minimal way: it contains the electorate size, the ballot
+#' format, and a list of "election events", i.e. situations in which
+#' a single ballot can affect the outcome in a given way.
+#' An election list is passed to the
+#' \code{election_event_probs()}
+#' function to compute the probability of each election event given
+#' a model of voting outcomes.
 #'
 #' An election list contains the electorate size \code{n},
 #' an \code{ordinal}
@@ -17,14 +20,47 @@
 #' These functions produce plain lists, so functions can be written
 #' for further election methods.
 #'
+#' The election methods provided are:
+#' \itemize{
+#' \item \code{plurality_election()}, where each voter votes for
+#' one of \code{k>=3} candidates and the candidate with the most votes wins.
+#' \item \code{positional_election()}, where each voter ranks the
+#' three candidates and the candidate with the highest score wins, with
+#' each top ranking worth 1 point, each bottom ranking worth 0 points,
+#' and each middle ranking worth \code{s} points.
+#' For now we can only handle 3 candidates.
+#' (I have written code to handle more, but the QHull
+#' functions seem to have trouble with the geometry.)
+#' \item \code{irv_election()} (instant-runoff), where each voter
+#' ranks the three candidates and the winner is determined by a process
+#' of elimination. The ballots are initially tallied using a
+#' positional method; the most commonly used option is plurality,
+#' i.e. \code{s=0}.) The lowest-scoring candidate is eliminated.
+#' Given three candidates, the winner is then determined according
+#' to which of the remaining candidates is ranked higher on more
+#' ballots.
+#' \item \code{kemeny_young_election()} (maximin), where any
+#' candidate who defeats all others in a pairwise comparison (i.e. is ranked higher on more ballots)
+#' is the winner and, if there is no such candidate, the winner is the
+#' candidate who is defeated by the smallest margin.
+#' }
+#'
+#' @examples
+#' plurality_election(k = 3)
+#' positional_election(s = .5) # borda count
+#' irv_election()
+#' kemeny_young_election()
+#'
 #' @param n The size of the electorate. This (slightly) affects the
 #' conditions for election events in the election list
 #' (e.g. the region in which one
 #' candidate is more than one vote ahead of another).
 #' \code{n} is also used when computing pivot event probabilities
-#' from an election list in \code{election_event_probabilities()},
+#' from an election list in \code{election_event_probs()},
 #' where higher \code{n} means lower probability.
 #' @param k The number of candidates in plurality.
+#' @param max_pivot_event_degree If 1, we consider two-way (near) ties
+#' in plurality. If 2, we also consider three-way (near) ties.
 #' @param s The value of a second-ranking in a three-candidate
 #' positional election, where a top ranking is worth 1 and a bottom ranking is worth 0.
 #'
@@ -38,6 +74,8 @@ plurality_election <- function(n = 1000, k = 4, max_pivot_event_degree = 2){
   if(!max_pivot_event_degree %in% 1:2){
     stop("max_pivot_event_degree needs to be either 1 or 2. The event_probabilities_from_event_list() function only permutes three candidates, so we cannot handle pivot events of degree 3 or higher, e.g. four-way ties.")
   }
+
+  if(k < 3){stop("There must be at least three candidates in a plurality election.")}
 
   el <- list()
 
@@ -85,6 +123,8 @@ plurality_election <- function(n = 1000, k = 4, max_pivot_event_degree = 2){
 #' @rdname election_list_functions
 #' @export
 positional_election <- function(n = 1000, s = .5){
+
+  if(s > 1 | s < 0){stop("s must be between 0 and 1.")}
 
   el <- list()
 
@@ -192,7 +232,7 @@ kemeny_young_election <- function(n = 1000){
   el$ordinal <- T
   el$events <- list()
 
-  # i is the condorcet winner, with j behind.
+  # i is the condorcet winner by more than one vote over j, with k the condorcet loser.
   el[["events"]][["i__j"]] <- list(
     win_conditions = rbind(c(1, 1, -1, -1, 1, -1, 1/n),   # i pairwise beats j
                        c(1, 1, 1, -1, -1, -1, 1/n),   # i pairwise beats k
@@ -201,7 +241,7 @@ kemeny_young_election <- function(n = 1000){
     P = rbind(rep(1, 6), 0, 0)
   )
 
-  # i is barely the condorcet winner, over j.
+  # i is the condorcet winner by less than one vote over j
   el[["events"]][["i_j"]] <- list(
     win_conditions = el[["events"]][["i__j"]]$win_conditions,
     tie_condition_rows = c(1),  # i barely beats j
@@ -210,8 +250,8 @@ kemeny_young_election <- function(n = 1000){
     adjacent_events = "j_i"
   )
 
-  # i wins in a cycle
-  el[["events"]][["ijki"]] = list(
+  # i wins in a cycle where i > j > k > i, with j next and k last
+  el[["events"]][["ik__ji|ijki"]] = list(
     win_conditions = rbind(c(1,1,-1,-1,1,-1, 1/n),    # i pairwise beats j
                        c(1,-1,1,1,-1,-1, 1/n),    # j pairwise beats k
                        c(-1, -1, -1, 1, 1, 1, 1/n), # k pairwise beats i
@@ -222,31 +262,32 @@ kemeny_young_election <- function(n = 1000){
     P = rbind(rep(1, 6), 0, 0)
   )
 
-  # i barely wins in a cycle, having a slightly better loss than j
+  # i barely wins in a cycle,
+  # with i's loss to k slightly better than j's loss to i
   el[["events"]][["ik_ji|ijki"]] = list(
-    win_conditions = el[["events"]][["ijki"]]$win_conditions,
+    win_conditions = el[["events"]][["ik__ji|ijki"]]$win_conditions,
     tie_condition_rows = c(4), # i's loss to k barely better than j's loss to i
-    scaling_factor = 2,  # is it sqrt(number of tallies involved)?
-    # P matrix is tricky.
+    scaling_factor = 2,  # sqrt(number of tallies involved)
     # a ballot that improves both i relative to k and j relative to i (jik) or makes both worse (kij) does not change the outcome. you only elect j by putting jki or kji.
     P = rbind(c(1,1,1,0,1,0),
               c(0,0,0,1,0,1),
               0),
-    adjacent_events = "ji_ik|ijki"
+    adjacent_events = "ji_ik|ijki"  # j's loss to i slightly better than i's loss to k
   )
 
-  # reverse the i j comparison
-  ji_ik_conditions <- el[["events"]][["ijki"]]$win_conditions
+  # here is the adjacent pivot event:
+  # j's loss to i slightly better than i's loss to k
+  ji_ik_conditions <- el[["events"]][["ik__ji|ijki"]]$win_conditions
   ji_ik_conditions[4,1:6] <- -ji_ik_conditions[4,1:6]
+  ji_ik_conditions[5,1:6] <- c(1,0,1,0,-1,-1) # i's loss to k better than k's loss to j
 
   el[["events"]][["ji_ik|ijki"]] = list(
     win_conditions = ji_ik_conditions,
-    tie_condition_rows = c(4), # i's loss to k barely better than j's loss to i
-    scaling_factor = 2,  # is it sqrt(number of tallies involved)?
-    # P matrix is tricky.
-    # a ballot that improves both i relative to k and j relative to i (jik) or makes both worse (kij) does not change the outcome. you only elect j by putting jki or kji.
-    P = rbind(c(1,1,1,0,1,0),
-              c(0,0,0,1,0,1),
+    tie_condition_rows = c(4), # j's loss to i barely better than i's loss to k
+    scaling_factor = 2,  # sqrt(number of tallies involved)
+    # you only elect i by putting i above k and j below i, so ikj or ijk
+    P = rbind(c(1,1,0,0,0,0),
+              c(0,0,1,1,1,1),
               0),
     adjacent_events = "ik_ji|ijki"
   )

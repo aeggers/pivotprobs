@@ -10,3 +10,4 @@ vignettes/*.pdf
 .DS_Store
 *_files/
 notes/*.html
+inst/doc

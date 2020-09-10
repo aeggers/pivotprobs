@@ -40,35 +40,37 @@ alpha3 <- c(.4, .35, .25)*85
 plurality3 <- plurality_election(k = 3)
 
 sc_out <- plurality3 %>%
-   election_event_probabilities(method = "sc", alpha = alpha3, tol = .1)
+   election_event_probs(method = "sc", alpha = alpha3, tol = .1)
 sc_out[["a_b"]]$integral
 #> [1] 0.003483393
 sc_out[["a_b"]]$seconds_elapsed
-#> [1] 0.04988289
+#> [1] 0.04389691
 sc_out[["a_c"]]$integral
 #> [1] 0.0003622554
 sc_out %>% map("seconds_elapsed") %>% unlist() %>% sum()
-#> [1] 0.1887867
+#> [1] 0.1734476
 
 mc_out <- plurality3 %>%
-   election_event_probabilities(method = "mc", alpha = alpha3, num_sims = 100000)
+   election_event_probs(method = "mc", alpha = alpha3, num_sims = 100000)
 mc_out[["a_b"]]$integral
-#> [1] 0.003511
+#> [1] 0.003514
 mc_out[["a_b"]]$seconds_elapsed
-#> [1] 0.2849569
+#> [1] 0.27934
 mc_out[["a_c"]]$integral
-#> [1] 0.000332
+#> [1] 0.000405
 mc_out %>% map("seconds_elapsed") %>% unlist() %>% sum()
-#> [1] 0.8242304
+#> [1] 0.7998221
 
 ev_out <- plurality3 %>%
-  election_event_probabilities(method = "ev", alpha = alpha3)
+  election_event_probs(method = "ev", alpha = alpha3)
 ev_out[["a_b"]]$integral
 #> [1] 0.003490655
 ev_out[["a_b"]]$seconds_elapsed
-#> [1] 0.007524014
+#> [1] 0.009953976
 ev_out[["a_c"]]$integral
 #> [1] 0.0003546949
 ev_out %>% map("seconds_elapsed") %>% unlist() %>% sum()
-#> [1] 0.02365303
+#> [1] 0.02731538
 ```
+
+Checking the Condorcet method

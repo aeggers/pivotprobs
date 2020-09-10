@@ -1,7 +1,5 @@
-## condorcet
-
-# a function to compute the probability of a decisive Condorcet tie between each pair of candidates
-condorcet_pivot_probs_from_sims <- function(sims, tol = .01, cand_names = NULL, sep = "", kemeny = T){
+#' @export
+condorcet_pivot_probs_from_sims <- function(sims, n = 1000, tol = .01, cand_names = NULL, sep = "", kemeny = T){
 
   if(is.null(cand_names)){
     cand_names <- letters[1:3]
@@ -11,17 +9,22 @@ condorcet_pivot_probs_from_sims <- function(sims, tol = .01, cand_names = NULL, 
     stop("sims must have 6 columns.")
   }
 
-  a_vs_b <- apply(sims[,c(1,2,5)], 1, sum) # the shae a got against b
-  a_vs_c <- apply(sims[,c(1,2,3)], 1, sum) # the shae a got against c
-  b_vs_c <- apply(sims[,c(1,3,4)], 1, sum) # the shae b got against c
+  a_vs_b <- apply(sims[,c(1,2,5)], 1, sum) # the share a got against b
+  a_vs_c <- apply(sims[,c(1,2,3)], 1, sum) # the share a got against c
+  b_vs_c <- apply(sims[,c(1,3,4)], 1, sum) # the share b got against c
 
-  normalizer <- tol/1 # (sqrt(6)/2) # a little unsure about this.
+  normalizer <- tol*n
 
   out <- list(
-    mean(a_vs_c > 1/2 & b_vs_c > 1/2 & abs(a_vs_b - 1/2) < tol/2)/normalizer,
-    mean(a_vs_b > 1/2 & b_vs_c < 1/2 & abs(a_vs_c - 1/2) < tol/2)/normalizer,
-    mean(a_vs_b < 1/2 & a_vs_c < 1/2 & abs(b_vs_c - 1/2) < tol/2)/normalizer
+    mean(a_vs_c > 1/2 & b_vs_c > 1/2 & abs(a_vs_b - 1/2) < tol/4)/normalizer,
+    mean(a_vs_b > 1/2 & b_vs_c < 1/2 & abs(a_vs_c - 1/2) < tol/4)/normalizer,
+    mean(a_vs_b < 1/2 & a_vs_c < 1/2 & abs(b_vs_c - 1/2) < tol/4)/normalizer
     )
+  # why divide by 4?
+  # we want cases where (v_a + v_{ca}) - (v_b + v_{cb}) \in (-tol/2, tol/2)
+  # ie 2(v_a + v_{ca}) - 1 > -tol/2 &  2(v_a + v_{ca}) - 1 < tol/2
+  # ie v_a + v_{ca} > 1/2 - tol/4 & v_a + v_{ca} < 1/2 + tol/4
+  # ie v_a + v_{ca} - 1/2 \in (-tol/4, tol/4)
 
   out_names <- c(paste0(cand_names[1], sep, cand_names[2]), paste0(cand_names[1], sep, cand_names[3]), paste0(cand_names[2], sep, cand_names[3]))
 
