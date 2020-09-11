@@ -144,7 +144,7 @@ positional_election <- function(n = 1000, s = .5){
     tie_condition_rows = c(1),                               # i barely scores above j
     scaling_factor = 2*sqrt(1 - s + s^2),
     P = rbind(c(1,1,s,0,1,1-s),
-            c(0,0,1-s,1,1,s),
+            c(0,0,1-s,1,0,s),
             0),
     adjacent_events = "j_i"
     )

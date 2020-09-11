@@ -169,6 +169,7 @@ election_event_probs <- function(election,
     }
   }else{
     distribution <- "sims"
+    mu <- apply(sims, 2, mean)
   }
 
   # if the user passes sims, we override the method provided.

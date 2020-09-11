@@ -22,6 +22,107 @@ library(tidyverse)
 
 This vignette is for establishing the validity of the estimates. 
 
+We also want to assess speed. 
+
+I'm curious how the simulation versions compare in speed. It could be that the general method is much slower. Why? Because the comparison of 
+
+```{r compare_speed_plurality, cache = T}
+alpha3 <- c(10, 9, 5)
+library(tictoc)
+
+m <- 100000
+n <- 5000
+k <- 3
+sim_window <- .01
+alpha <- runif(k, min = 2, max = 12) %>% sort(decreasing = T)
+sims <- gtools::rdirichlet(n = m, alpha = alpha)
+tic("Standalone MC")
+pps <- plurality_pivot_probs_from_sims(sims, tol = sim_window, n = n)
+toc()
+tic("Embedded MC")
+pps2 <- plurality_election(k = k, n = n) %>% 
+  election_event_probs(method = "mc", 
+                       sims = sims,
+                       sim_window = sim_window, 
+                       skip_compound_pivot_events = T, skip_non_pivot_events = T)
+toc()
+```
+
+
+```{r compare_speed_plurality_4, cache = T}
+
+k <- 4
+alpha <- runif(k, min = 2, max = 12) %>% sort(decreasing = T)
+sims <- gtools::rdirichlet(n = m, alpha = alpha)
+
+tic("Standalone MC")
+pps <- plurality_pivot_probs_from_sims(sims, tol = sim_window, n = n)
+toc()
+tic("Embedded MC")
+pps2 <- plurality_election(k = k, n = n) %>% 
+  election_event_probs(method = "mc", 
+                       sims = sims,
+                       sim_window = sim_window, 
+                       skip_compound_pivot_events = T, skip_non_pivot_events = T)
+toc()
+```
+
+
+
+How about for another method? 
+
+
+
+```{r compare_speed_positional, cache = T}
+# xx
+m <- 300000
+n <- 6000
+alpha <- runif(6, min = 2, max = 12) %>% sort(decreasing = T)
+sims <- gtools::rdirichlet(n = m, alpha = alpha)
+
+tic("Standalone MC")
+set.seed(12345)
+pps <- positional_pivot_probs_from_sims(sims, s = .5, tol = sim_window, n = n)
+toc()
+
+set.seed(12345)
+tic("Embedded MC")
+pps2 <- positional_election(s = .5, n = n) %>% 
+  election_event_probs(method = "mc", 
+                       sims = sims,
+                       sim_window = sim_window, 
+                       skip_compound_pivot_events = T, 
+                       skip_non_pivot_events = T)
+toc()
+```
+
+```{r compare_results_positional, cache = T}
+# compare the content 
+pps_df <- tibble(
+  event = names(pps),
+  standalone_pp = pps %>% map("integral"),
+  standalone_P = pps %>% map("P")
+)
+
+pps2_df <- tibble(
+  event = names(pps2),
+  eep_pp = pps2 %>% map("integral"),
+  eep_P = pps2 %>% map("P")
+) 
+
+pps_df %>% 
+  select(-standalone_P) %>% 
+  left_join(pps2_df %>% select(-eep_P), by = "event") %>% 
+  knitr::kable()
+
+#pps_df %>% 
+#  select(-standalone_pp) %>% 
+#  mutate(standalone_P = as_tibble(standalone_P)) %>% 
+#  unnest(standalone_P) -> tmp
+
+pps  # %>% combine_P_matrices() %>% knitr::kable()
+pps2 # %>% combine_P_matrices() %>% knitr::kable()
+```
 
 ## Convergent validity
 

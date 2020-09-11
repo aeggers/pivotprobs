@@ -1,13 +1,13 @@
 # standalone monte carlo methods
 
 #' @export
-plurality_pivot_probs_from_sims <- function(sims = NULL, n = 1000, tol = .01, cand_names = NULL, sep = ""){
+plurality_pivot_probs_from_sims <- function(sims = NULL, n = 1000, tol = .01, cand_names = NULL, sep = "_"){
 
   out <- list()
   if(is.null(cand_names)){cand_names <- letters[1:ncol(sims)]}
   for(i in 1:(ncol(sims)-1)){
     for(j in (i+1):ncol(sims)){
-      out[[paste0(cand_names[i], sep, cand_names[j])]] = ab_plurality_tie_for_first_from_sims(cbind(sims[,c(i,j)], sims[,-c(i,j)]), tol = tol, n = n)
+      out[[paste0(cand_names[i], sep, cand_names[j])]] <- out[[paste0(cand_names[j], sep, cand_names[i])]] <-  ab_plurality_tie_for_first_from_sims(cbind(sims[,c(i,j)], sims[,-c(i,j)]), tol = tol, n = n)
     }
   }
   out
@@ -20,7 +20,7 @@ ab_plurality_tie_for_first_from_sims <- function(sims, tol = .01, n = 1000){
 
 
 #' @export
-positional_pivot_probs_froms_sims <- function(sims, tol = .01, n = 1000, s = .5, cand_names = NULL, sep = ""){
+positional_pivot_probs_from_sims <- function(sims, tol = .01, n = 1000, s = .5, cand_names = NULL, sep = "_"){
 
   if(ncol(sims) != 6){
     stop("sims must have 6 columns.")
@@ -43,13 +43,42 @@ positional_pivot_probs_froms_sims <- function(sims, tol = .01, n = 1000, s = .5,
   normalization_factor <- n*tol
 
   # this is direct Monte Carlo -- nothing fancy
-  out <- list(
-    mean(score_a > score_b & score_a - score_b < tol & score_b > score_c)/normalization_factor,
-    mean(score_a > score_c & score_a - score_c < tol & score_c > score_b)/normalization_factor,
-    mean(score_b > score_c & score_b - score_c < tol & score_c > score_a)/normalization_factor
+  out <- list()
+  ab_P <- rbind(c(1,1,s,0,1,1-s),
+        c(0,0,1-s,1,0,s),
+        0)
+
+  a_b <- mean(abs(score_a - score_b) < tol/2 & score_b - score_c > 1/n)/normalization_factor
+
+  out[[paste0(cand_names[1], sep, cand_names[2])]] <- list(
+    integral = a_b,
+    P = ab_P
   )
 
-  names(out) <- c(paste0(cand_names[1], sep, cand_names[2]), paste0(cand_names[1], sep, cand_names[3]), paste0(cand_names[2], sep, cand_names[3]))
+  out[[paste0(cand_names[2], sep, cand_names[1])]] <-
+    list(integral = a_b,
+         P = ab_P[c(2,1,3), c(3,4,1,2,6,5)])
+
+  a_c <- mean(abs(score_a - score_c) < tol/2 & score_c - score_b > 1/n)/normalization_factor
+
+  out[[paste0(cand_names[1], sep, cand_names[3])]] <- list(
+    integral = a_c,
+    P = ab_P[c(1,3,2), c(2,1,5,6,3,4)]
+  )
+
+  out[[paste0(cand_names[3], sep, cand_names[1])]] <-
+    list(integral = a_c,
+         P = ab_P[c(2,3,1), c(5,6, 2,1,4,3)])
+
+  b_c <- mean(abs(score_b - score_c) < tol/2 & score_c - score_a > 1/n)/normalization_factor
+
+  out[[paste0(cand_names[2], sep, cand_names[3])]] <-
+    list(integral = b_c,
+         P = ab_P[c(3,1,2), c(4,3,6,5,2,1)])
+
+  out[[paste0(cand_names[3], sep, cand_names[2])]] <-
+    list(integral = b_c,
+         P = ab_P[c(3,2,1), c(6,5,4,3,2,1)])
 
   out
 
