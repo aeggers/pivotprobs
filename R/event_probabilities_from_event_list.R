@@ -64,6 +64,8 @@
 #' of events where one vote cannot make a difference, e.g. where candidate \code{a}
 #' wins by more than one vote. Relevant for methods "sc" and "mc".
 #' @param skip_compound_pivot_events Set to \code{T} to avoid computing the probability of (near) three-way ties in plurality.
+#' @param force_condition_based_mc Set to \code{T} to force Monte Carlo simulations to
+#' use the conditions in the election object rather than a faster bespoke method.
 #' @param store_time By default we store the time each computation takes, in seconds.
 #' @param maxEvals The maximum number of function evaluations to compute an
 #' integral via method "sc" (passed to
@@ -118,7 +120,9 @@ election_event_probs <- function(election,
                                  drop_dimension = F,
                                  merge_adjacent_pivot_events = F,
                                  skip_non_pivot_events = F,
-                                 skip_compound_pivot_events = F,
+                                 skip_compound_pivot_events = T,
+                                 minimum_volume = 0,
+                                 force_condition_based_mc = F,
                                  store_time = T,
                                  maxEvals = 100000, tol = .01, # SimplicialCubature arguments
                                  ev_increments = 50,
@@ -207,6 +211,18 @@ election_event_probs <- function(election,
         sims <- gtools::rdirichlet(n = num_sims, alpha = alpha)
       }else if(distribution == "logisticnofmal"){
         sims <- rlogisticnormal(n = num_sims, mu = mu, sigma = sigma)
+      }
+    }
+    if(!force_condition_based_mc & election$system %in% c("plurality", "positional", "irv", "kemeny_young")){
+      # we use a "standalone" method for simulations, because these are faster
+      if(election$system == "plurality"){
+        return(plurality_pivot_probs_from_sims(sims = sims, n = n, tol = sim_window, cand_names = cand_names))
+      }else if(election$system == "positional"){
+        return(positional_pivot_probs_from_sims(sims = sims, n = n, tol = sim_window, cand_names = cand_names, s = election$s))
+      }else if(election$system == "irv"){
+        return(irv_pivot_probs_from_sims(sims = sims, n = n, tol = sim_window, cand_names = cand_names, s = election$s))
+      }else if(election$system == "kemeny_young"){
+        return(condorcet_pivot_probs_from_sims(sims = sims, n = n, tol = sim_window, cand_names = cand_names, kemeny = T))
       }
     }
   }
@@ -353,6 +369,28 @@ election_event_probs <- function(election,
             this_S <- S_list[[generic_event_name]]
           }else{
             this_S <- S_array_from_inequalities_and_conditions(this_event$win_conditions, rows_to_alter = this_event$tie_condition_rows, drop_dimension = drop_dimension, limits = limits)  # qhull options, epsilon
+            if(!is.null(this_S) & !is.null(minimum_volume) & minimum_volume > 0){
+              # some matrices in the S array produce an integral of zero
+              # we can filter these out here. I thought this would speed thingds up but it didn't. I am leaving in here in case we can figure out a better way later.
+              # I considered also having the filtering built into the election_list
+              # methods because e.g. it's the same for every Condorcet election,
+              # but we have so much flexibility with s in positional and IRV
+              # methods that it didn't look very elegant/general.
+              # this is a general solution that doesn't seem to solve anything.
+              indices_to_keep <- c()
+              for(k in 1:(dim(this_S)[3])){
+                this_val <- SimplicialCubature::adaptIntegrateSimplex(f = dirichlet_for_integration, S = this_S[,,k], alpha = rep(1, 6), maxEvals = 100000, tol = .2)
+                if(this_val$integral > minimum_volume){
+                  cat(".")
+                  indices_to_keep <- c(indices_to_keep, k)
+                }else{
+                  cat("-")
+                }
+              }
+              cat("\n")
+              # subset the S array
+              this_S <- this_S[,,indices_to_keep]
+            }
             S_list[[generic_event_name]] <- this_S
           }
 

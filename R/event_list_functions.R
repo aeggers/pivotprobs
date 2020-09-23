@@ -4,6 +4,7 @@
 #' in a minimal way: it contains the electorate size, the ballot
 #' format, and a list of "election events", i.e. situations in which
 #' a single ballot can affect the outcome in a given way.
+#' It also contains a label for the voting system, e.g. "positional".
 #' An election list is passed to the
 #' \code{election_event_probs()}
 #' function to compute the probability of each election event given
@@ -81,6 +82,9 @@ plurality_election <- function(n = 1000, k = 4, max_pivot_event_degree = 2){
 
   el$n <- n
   el$ordinal <- F
+  el$system <- "plurality"
+  el$k <- k
+
   el$events <- list()
 
   win_P <- matrix(0, nrow = k, ncol = k)
@@ -130,6 +134,9 @@ positional_election <- function(n = 1000, s = .5){
 
   el$n <- n
   el$ordinal <- T
+  el$system <- "positional"
+  el$s <- s
+
   el$events <- list()
 
   el[["events"]][["i_"]] <- list(
@@ -164,6 +171,9 @@ irv_election <- function(n = 1000, s = 0){
 
   el$n <- n
   el$ordinal <- T
+  el$system <- "irv"
+  el$s <- s
+
   el$events <- list()
 
   # positional scaling factor
@@ -230,6 +240,8 @@ kemeny_young_election <- function(n = 1000){
 
   el$n <- n
   el$ordinal <- T
+  el$system <- "kemeny_young"
+
   el$events <- list()
 
   # i is the condorcet winner by more than one vote over j, with k the condorcet loser.
