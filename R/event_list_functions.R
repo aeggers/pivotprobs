@@ -70,7 +70,7 @@ NULL
 
 #' @rdname election_list_functions
 #' @export
-plurality_election <- function(n = 1000, k = 4, max_pivot_event_degree = 2){
+plurality_election <- function(n = 1000, k = 4, max_pivot_event_degree = 1){
 
   if(!max_pivot_event_degree %in% 1:2){
     stop("max_pivot_event_degree needs to be either 1 or 2. The event_probabilities_from_event_list() function only permutes three candidates, so we cannot handle pivot events of degree 3 or higher, e.g. four-way ties.")

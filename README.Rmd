@@ -1,5 +1,6 @@
 ---
 output: github_document
+always_allow_html: true
 ---
 
 <!-- README.md is generated from README.Rmd. Please edit that file -->
@@ -33,25 +34,142 @@ You can install development version from [GitHub](https://github.com/) with:
 devtools::install_github("aeggers/pivotprobs")
 ```
 
-## Example
-
-Lots of dependencies -- you also need `rcdd` and `geometry`. 
+## Setup
 
 ```{r example, message = F}
 library(pivotprobs)
-library(dplyr)
-library(tidyr)
-library(purrr)
-library(stringr)
+library(tidyverse)
+library(kableExtra) # for presentation
+```
 
+## Basic syntax for getting a P-matrix from Dirichlet parameters 
+
+Suppose we just want a P-matrix given Dirichlet parameters and an electorate size. 
+
+### 3-candidate plurality 
+
+We will use the Eggers-Vivyan method, which is biased for elections with more than three candidates but fine in the three-candidate case (and very fast). 
+
+```{r basic_plurality}
+# define some Dirichlet parameters 
 alpha3 <- c(.4, .35, .25)*85
-plurality3 <- plurality_election(k = 3)
+electorate_size <- 15000
 
+plurality_election(k = 3, n = electorate_size) %>% 
+  election_event_probs(method = "ev", alpha = alpha3) %>% 
+  combine_P_matrices()
+
+```
+
+
+### 3-candidate IRV 
+
+We will use the Eggers-Nowacki method, which is validated and very fast. 
+
+```{r basic_irv}
+# define some Dirichlet parameters 
+alpha6 <- c(.3, .05, .2, .15, .1, .2)*85
+electorate_size <- 15000
+
+irv_election(n = electorate_size) %>% 
+  election_event_probs(method = "en", alpha = alpha6) %>% 
+  combine_P_matrices()
+
+```
+
+
+## More detailed illustrations
+
+### Election object 
+
+We always start with an election object, which is just a list containing information about the voting system and the electorate size. 
+
+```{r election_objects}
+plurality_5 <- plurality_election(n = 5000, k = 5) # 5-candidate plurality
+borda <- positional_election(n = 5000, s = .5) # 3-candidate Borda count
+irv <- irv_election(n = 5000) # 3-candidate IRV
+irv_borda <- irv_election(n = 5000, s = .5) # 3-candidate IRV with first round Borda count 
+ky <- kemeny_young_election(n = 5000) # kemeny-young election 
+```
+
+### Computing event probabilities 
+
+For each of these, we can compute election event probabilities by several methods using the `election_event_probs()` function. 
+
+(Pick up here.)
+
+
+```{r three_candidate_plurality}
+### 3 candidate plurality case ### 
+# define the election object 
+plurality3 <- plurality_election(k = 3, n = 15000) 
+# this is the necessary first argument to election_event_probs().
+# it is just a list containing the key attributes of the voting system.
+# those attributes include "election events", each of which is associated 
+# with a set of conditions under which it happens and a matrix showing how 
+# a single ballot can affect the outcome at that event. 
+# you must also specify the electorate, n.
+
+# a bit of inspection 
+plurality3$events$i_j$P
+plurality3$n
+
+# define some Dirichlet parameters 
+alpha3 <- c(.4, .35, .25)*85
+
+# compute pivot event probabilities using the Eggers-Vivyan method 
+plurality3 %>% 
+  election_event_probs(method = "ev", alpha = alpha3) -> pps
+
+# inspect pivot probabilities 
+tibble(event = names(pps), prob = pps %>% map("integral")) %>% 
+  kbl(caption = "Pivot event probabilities computed by Eggers-Vivyan method") %>% 
+  kable_classic(full_width = F, html_font = "Cambria")
+
+# the result includes P matrices for each event
+pps$a_b$P 
+pps$a_c$P
+
+# a convenience method to combine these event-specific P matrices according to event probabilities to get the full P matrix:  
+pps %>% combine_P_matrices()
+```
+
+Three-candidate IRV: 
+
+```{r three_candidate_irv}
+### 3 candidate IRV case ### 
+# define the election object 
+irv <- irv_election(n = 15000) 
+
+# the Dirichlet parameters 
+alpha6 <- c(.3, .05, .2, .15, .1, .2)*85
+
+# compute pivot event probabilities using the Eggers-Nowacki method 
+irv %>% 
+  election_event_probs(method = "en", alpha = alpha6) -> pps
+
+# inspect pivot probabilities 
+tibble(event = names(pps), prob = pps %>% map("integral")) %>% 
+  kbl(caption = "Pivot event probabilities computed by Eggers-Nowacki method") %>% 
+  kable_classic(full_width = F, html_font = "Cambria")
+
+# make P matrix 
+pps %>% combine_P_matrices()
+```
+
+Other ways to compute pivot probabilities for the plurality-Dirichlet case: 
+
+```{r other_examples}
+# SimplicialCubature: adaptive integration of election distribution
 sc_out <- plurality3 %>%
-   election_event_probs(method = "sc", alpha = alpha3, tol = .1)
-sc_out[["a_b"]]$integral
-sc_out[["a_b"]]$seconds_elapsed
-sc_out[["a_c"]]$integral
+   election_event_probs(method = "sc", alpha = alpha3, tol = .01)
+tibble(event = names(sc_out), prob = sc_out %>% map("integral")) %>% 
+  kbl(caption = "Election events in plurality (including non-pivot events)") %>% 
+  kable_classic(full_width = F)
+
+#sc_out[["a_b"]]$integral
+#sc_out[["a_b"]]$seconds_elapsed
+#sc_out[["a_c"]]$integral
 sc_out %>% map("seconds_elapsed") %>% unlist() %>% sum()
 
 mc_out <- plurality3 %>%
@@ -69,6 +187,24 @@ ev_out[["a_c"]]$integral
 ev_out %>% map("seconds_elapsed") %>% unlist() %>% sum()
 ```
 
+We can Other methods: 
 
-Checking the Condorcet method 
+```{r others}
+# borda count 
+positional_election(n = 5000, s = .5) %>% 
+  election_event_probs(method = "mc", alpha = alpha6, num_sims = 500000) %>% 
+  combine_P_matrices()
+
+# IRV with borda count first round
+irv_election(n = 5000, s = .5) %>% 
+  election_event_probs(method = "mc", alpha = alpha6, num_sims = 500000) %>% 
+  combine_P_matrices()
+
+# kemeny-young (condorcet) 
+#kemeny_young_election(n = 5000) %>% 
+#  election_event_probs(method = "sc", alpha = alpha6, tol = .1) %>% 
+#  combine_P_matrices()
+
+```
+
 
