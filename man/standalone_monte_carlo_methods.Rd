@@ -11,33 +11,41 @@
 plurality_pivot_probs_from_sims(
   sims = NULL,
   n = 1000,
-  tol = 0.01,
+  window = 0.01,
   cand_names = NULL,
-  sep = "_"
+  sep = "_",
+  method = "density",
+  merge = F
 )
 
 positional_pivot_probs_from_sims(
   sims,
-  tol = 0.01,
+  window = 0.01,
   n = 1000,
   s = 0.5,
   cand_names = NULL,
-  sep = "_"
+  sep = "_",
+  method = "density",
+  merge = F,
+  bw_divisor = 1
 )
 
 irv_pivot_probs_from_sims(
   sims,
-  tol = 0.01,
+  window = 0.01,
   n = 1000,
-  s = 0.5,
+  s = 0,
   cand_names = NULL,
-  sep = "_"
+  sep = "_",
+  method = "density",
+  merge = F,
+  bw_divisor = 1
 )
 
 condorcet_pivot_probs_from_sims(
   sims,
   n = 1000,
-  tol = 0.01,
+  window = 0.01,
   cand_names = NULL,
   sep = "_",
   kemeny = T
@@ -49,7 +57,7 @@ ballot type. Must be 6 columns for the ordinal methods (IRV, Kemeny-Young, posit
 
 \item{n}{Size of electorate}
 
-\item{tol}{Window within which two candidates are considered to be tied for the purpose of
+\item{window}{Window within which two candidates are considered to be tied for the purpose of
 simulation. This is normalized away. Wider window means lower variance but more bias.}
 
 \item{cand_names}{Names of the candidates.}
@@ -76,7 +84,7 @@ Results have been validated against \code{election_event_probs()}.
 sims <- gtools::rdirichlet(100000, alpha = c(9,7,3,4,4,6))
 plurality_pivot_probs_from_sims(sims)
 positional_pivot_probs_from_sims(sims, s=.5)
-irv_pivot_probs_from_sims(sims, s=.5)
+irv_pivot_probs_from_sims(sims)
 condorcet_pivot_probs_from_sims(sims)
 
 

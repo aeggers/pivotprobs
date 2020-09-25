@@ -39,6 +39,12 @@
 #'
 #' @param election A list with elements \code{n} (electorate size), \code{ordinal}
 #'  (logical flag indicating whether it is an ordinal system or not), and \code{events}, a list of election events each with elements \code{win_conditions}, \code{tie_condition_rows}, and \code{P}. See ?event_list_functions.
+#' @param method Method for estimating event probabilities: one of "sc"
+#'  (SimplicialCubature), "mc" (Monte Carlo), "ev" (Eggers-Vivyan), or
+#'  "en" (Eggers-Nowacki). See below for details.
+#' @param mc_method Method for Monte Carlo estimation of pivot
+#' event probabilities: one of
+#' "rectangular", "density", "naive_density".
 #' @param alpha Optional vector of parameters for Dirichlet distribution (one for
 #' each ballot type). In a plurality election with k candidates, should be of
 #' length k; in an ordinal system with 3 candidates, should be length 6.
@@ -78,6 +84,9 @@
 #' first-round pivot events in method "en".
 #' @param en_increments_2nd_round Increments for numerical integration of
 #' second-round pivot events in method "en".
+#' @param bw_divisor_for_naive If ks::hpi determines optimal bandwidth
+#' for density estimation is h, we use h/bw_divisor_for_naive when
+#' \code{mc_method="naive_density"}.
 #'
 #' @return A list containing one list per election event. Each of these lower-level
 #' lists contains
@@ -108,6 +117,7 @@
 #' @export
 election_event_probs <- function(election,
                                  method = "sc",  # sc, mc, ev, en
+                                 mc_method = "density", # "density", "naive_density", "rectangular"
                                  # distribution parameters
                                  alpha = NULL, # dirichlet
                                  mu = NULL,  # dirichlet or logisticnormal
@@ -128,6 +138,7 @@ election_event_probs <- function(election,
                                  ev_increments = 50,
                                  en_increments_1st_round = 30,
                                  en_increments_2nd_round = 100,
+                                 bw_divisor_for_naive = 2,
                                  ... # other arguments to SimplicialCubature::adaptIntegrateSimplex()
                                  ){
 
@@ -180,7 +191,7 @@ election_event_probs <- function(election,
   if(!is.null(sims)){
     if(!method %in% mc_method_names){
       warning("You provided `sims` but specified a method or than simulation. Setting method to 'mc' (Monte Carlo).")
-      method <- "sc"
+      method <- "mc"
     }
   }else if(method %in% ev_method_names){
     if(ordinal){stop("The Eggers-Vivyan method can only be used for plurality elections. Your election argument says it is an ordinal method.")}
@@ -195,12 +206,10 @@ election_event_probs <- function(election,
     merge_adjacent_pivot_events <- T # TODO: consider relaxing this.
   }
 
-  # for simulations, we need to merge_adjacent_pivot_events. we also set drop_dimension = F so that we don't apply the scaling factor.
+  # for simulations with mc_method = "rectangular", we need to merge_adjacent_pivot_events. we also set drop_dimension = F so that we don't apply the scaling factor.
   # you can think of it as dropping a dimension, but then the scaling factors cancel out.
   # better to think of it like this: the ratio of the probability of being within sim_window to the pivot probability is the ratio of sim_window to 1/n. so pivot probability is probability of being within sim_window over (sim_window times n)
   if(method %in% mc_method_names){
-    merge_adjacent_pivot_events <- T
-    drop_dimension <- F
     if(is.null(sims)){
       # we need to draw simulations.
       if(!is.numeric(num_sims)){stop("If draw_sims is TRUE, we need a numeric num_sims.")}
@@ -216,13 +225,18 @@ election_event_probs <- function(election,
     if(!force_condition_based_mc & election$system %in% c("plurality", "positional", "irv", "kemeny_young")){
       # we use a "standalone" method for simulations, because these are faster
       if(election$system == "plurality"){
-        return(plurality_pivot_probs_from_sims(sims = sims, n = n, tol = sim_window, cand_names = cand_names))
+        return(plurality_pivot_probs_from_sims(sims = sims, n = n, window = sim_window, cand_names = cand_names, method = mc_method, merge = merge_adjacent_pivot_events))
       }else if(election$system == "positional"){
-        return(positional_pivot_probs_from_sims(sims = sims, n = n, tol = sim_window, cand_names = cand_names, s = election$s))
+        return(positional_pivot_probs_from_sims(sims = sims, n = n, window = sim_window, cand_names = cand_names, method = mc_method, merge = merge_adjacent_pivot_events, s = election$s))
       }else if(election$system == "irv"){
-        return(irv_pivot_probs_from_sims(sims = sims, n = n, tol = sim_window, cand_names = cand_names, s = election$s))
+        return(irv_pivot_probs_from_sims(sims = sims, n = n, window = sim_window, cand_names = cand_names, method = mc_method, merge = merge_adjacent_pivot_events, s = election$s))
       }else if(election$system == "kemeny_young"){
-        return(condorcet_pivot_probs_from_sims(sims = sims, n = n, tol = sim_window, cand_names = cand_names, kemeny = T))
+        # TODO: update this
+        return(condorcet_pivot_probs_from_sims(sims = sims, n = n, window = sim_window, cand_names = cand_names, kemeny = T))
+      }else{
+        # if we are using the election conditions -- legacy method, basically
+        merge_adjacent_pivot_events <- T
+        drop_dimension <- F
       }
     }
   }

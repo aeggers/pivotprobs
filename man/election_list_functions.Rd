@@ -38,6 +38,7 @@ An election list represents an election
 in a minimal way: it contains the electorate size, the ballot
 format, and a list of "election events", i.e. situations in which
 a single ballot can affect the outcome in a given way.
+It also contains a label for the voting system, e.g. "positional".
 An election list is passed to the
 \code{election_event_probs()}
 function to compute the probability of each election event given

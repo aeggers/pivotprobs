@@ -7,6 +7,7 @@
 election_event_probs(
   election,
   method = "sc",
+  mc_method = "density",
   alpha = NULL,
   mu = NULL,
   precision = NULL,
@@ -18,19 +19,30 @@ election_event_probs(
   drop_dimension = F,
   merge_adjacent_pivot_events = F,
   skip_non_pivot_events = F,
-  skip_compound_pivot_events = F,
+  skip_compound_pivot_events = T,
+  minimum_volume = 0,
+  force_condition_based_mc = F,
   store_time = T,
   maxEvals = 1e+05,
   tol = 0.01,
   ev_increments = 50,
   en_increments_1st_round = 30,
   en_increments_2nd_round = 100,
+  bw_divisor_for_naive = 2,
   ...
 )
 }
 \arguments{
 \item{election}{A list with elements \code{n} (electorate size), \code{ordinal}
 (logical flag indicating whether it is an ordinal system or not), and \code{events}, a list of election events each with elements \code{win_conditions}, \code{tie_condition_rows}, and \code{P}. See ?event_list_functions.}
+
+\item{method}{Method for estimating event probabilities: one of "sc"
+(SimplicialCubature), "mc" (Monte Carlo), "ev" (Eggers-Vivyan), or
+"en" (Eggers-Nowacki). See below for details.}
+
+\item{mc_method}{Method for Monte Carlo estimation of pivot
+event probabilities: one of
+"rectangular", "density", "naive_density".}
 
 \item{alpha}{Optional vector of parameters for Dirichlet distribution (one for
 each ballot type). In a plurality election with k candidates, should be of
@@ -69,6 +81,9 @@ wins by more than one vote. Relevant for methods "sc" and "mc".}
 
 \item{skip_compound_pivot_events}{Set to \code{T} to avoid computing the probability of (near) three-way ties in plurality.}
 
+\item{force_condition_based_mc}{Set to \code{T} to force Monte Carlo simulations to
+use the conditions in the election object rather than a faster bespoke method.}
+
 \item{store_time}{By default we store the time each computation takes, in seconds.}
 
 \item{maxEvals}{The maximum number of function evaluations to compute an
@@ -86,6 +101,10 @@ first-round pivot events in method "en".}
 
 \item{en_increments_2nd_round}{Increments for numerical integration of
 second-round pivot events in method "en".}
+
+\item{bw_divisor_for_naive}{If ks::hpi determines optimal bandwidth
+for density estimation is h, we use h/bw_divisor_for_naive when
+\code{mc_method="naive_density"}.}
 }
 \value{
 A list containing one list per election event. Each of these lower-level
