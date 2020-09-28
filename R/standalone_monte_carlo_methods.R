@@ -38,15 +38,26 @@ density_estimate <- function(x, bw_divisor = 1, eval.points = c(0)){
   ks::kde(x = x, h = bw, eval.points = eval.points)$estimate
 }
 
+# this is a better general approach, but I developed after implementing the other way, so only applied to Condorcet
+pivot_prob_from_delta_and_condition <- function(delta, condition, method = "density", bw_divisor = 1, window = .01, eval.points = c(0,0), n = 1000){
+  if(method == "rectangular"){
+    rep(mean(condition & abs(delta) < window/2)/(n*window), 2)
+  }else if(method %in% c("naive_density", "density")){
+    mean(condition)*density_estimate(delta[condition], bw_divisor = bw_divisor, eval.points = eval.points)*(1/n)
+  }else{
+    stop("Unknown method for estimating density.")
+  }
+}
+
 #' @rdname standalone_monte_carlo_methods
 #' @export
-plurality_pivot_probs_from_sims <- function(sims = NULL, n = 1000, window = .01, cand_names = NULL, sep = "_", method = "density", merge = F){
+plurality_pivot_probs_from_sims <- function(sims = NULL, n = 1000, window = .01, cand_names = NULL, sep = "_", method = "density", merge = F, bw_divisor = 1, skip_non_pivot_events = T){
 
   out <- list()
   if(is.null(cand_names)){cand_names <- letters[1:ncol(sims)]}
   for(i in 1:(ncol(sims)-1)){
     for(j in (i+1):ncol(sims)){
-      pp <- ab_plurality_tie_for_first_from_sims(cbind(sims[,c(i,j), drop = F], sims[,-c(i,j), drop = F]), method = method, n = n, merge = merge, window = window)
+      pp <- ab_plurality_tie_for_first_from_sims(cbind(sims[,c(i,j), drop = F], sims[,-c(i,j), drop = F]), method = method, n = n, merge = merge, window = window, bw_divisor = bw_divisor)
       out[[paste0(cand_names[i], sep, cand_names[j])]] <- list(
         integral = pp[1],
         P = plurality_P_matrix_from_indices(i,j,ncol(sims))
@@ -57,6 +68,19 @@ plurality_pivot_probs_from_sims <- function(sims = NULL, n = 1000, window = .01,
       )
     }
   }
+
+  if(!skip_non_pivot_events){
+    row_maxes <- apply(sims, 1, max)
+    empty_P <- matrix(0, nrow = length(cand_names), ncol = length(cand_names))
+    for(i in 1:ncol(sims)){
+      this_P <- empty_P
+      this_P[i,] <- 1
+      out[[paste0(cand_names[i], "_")]] <- list(
+        integral = mean(sims[,i] == row_maxes),
+        P = this_P)
+    }
+  }
+
   out
 }
 
@@ -171,7 +195,7 @@ positional_pivot_probs_from_sims <- function(sims, window = .01, n = 1000, s = .
 
 }
 
-positional_pivot_probs_12_from_scores <- function(score_1, score_2, score_3, method = "density", n = 1000, merge = F, window = .01, bw_divisor = 2){
+positional_pivot_probs_12_from_scores <- function(score_1, score_2, score_3, method = "density", n = 1000, merge = F, window = .01, bw_divisor = 1){
   # returns a pair of results, the first for 1 being ahead of 2, the second for 2 being ahead of 1 (these are the same for merge = T or method = "rectangular")
   # methods: "density", "naive_density", "rectangular"
   # easily extended to more candidates.
@@ -456,7 +480,190 @@ irv_first_round_pivot_probs_ab <- function(score_a, score_b, score_c, a_vs_c, b_
 
 #' @rdname standalone_monte_carlo_methods
 #' @export
-condorcet_pivot_probs_from_sims <- function(sims, n = 1000, window = .01, cand_names = NULL, sep = "_", kemeny = T){
+condorcet_pivot_probs_from_sims <- function(sims, n = 1000, window = .01, cand_names = NULL, sep = "_", kemeny = T, method = "density", merge = F, bw_divisor = 1){
+
+  if(is.null(cand_names)){
+    if(kemeny & !is.null(cand_names) & (cand_names %>% sort() %>% paste(collapse = "") != "abc")){
+      warning("Kemeny-Young pivot event names will use a, b, c, not the supplied candidate names.")
+    }
+    cand_names <- letters[1:3]
+  }
+
+  if(ncol(sims) != 6){
+    stop("sims must have 6 columns.")
+  }
+
+  if(method == "rectangular" | merge){
+    limits <- c(0,0)
+  }else{
+    limits <- c(1, -1)/(2*n)
+  }
+
+  # pairwise tallies: what each gets against each other
+  # note this is different from meaning above
+  a_vs_b <- sims[,1] + sims[,2] + sims[,5]
+  a_vs_c <- sims[,1] + sims[,2] + sims[,3]
+  b_vs_a <- sims[,3] + sims[,4] + sims[,6]
+  b_vs_c <- sims[,3] + sims[,4] + sims[,1]
+  c_vs_a <- sims[,5] + sims[,6] + sims[,4]
+  c_vs_b <- sims[,5] + sims[,6] + sims[,2]
+
+  out <- list()
+
+  # Condorcet winner event a_b
+  delta <- a_vs_b - b_vs_a
+  delta_adjust <- ifelse(method == "density", delta, 0)
+  cond_1 <- a_vs_c - c_vs_a > 1/n + delta_adjust/2
+  cond_2 <- b_vs_c - c_vs_b > 1/n - delta_adjust/2
+  pps <- pivot_prob_from_delta_and_condition(delta, cond_1 & cond_2, method = method, bw_divisor = bw_divisor, window = window, eval.points = limits, n = n)
+  a_b_P <- rbind(c(1,1,0,0,1,0), c(0,0,1,1,0,1),0)
+  out[[paste0(cand_names[1], sep, cand_names[2])]] <- list(
+    integral = pps[1],
+    P = a_b_P
+  )
+  out[[paste0(cand_names[2], sep, cand_names[1])]] <- list(
+    integral = pps[2],
+    P = a_b_P
+  )
+
+  # Condorcet winner event a_c
+  delta <- a_vs_c - c_vs_a
+  delta_adjust <- ifelse(method == "density", delta, 0)
+  cond_1 <- a_vs_b - b_vs_a > 1/n + delta_adjust/2
+  cond_2 <- c_vs_b - b_vs_c > 1/n - delta_adjust/2
+  pps <- pivot_prob_from_delta_and_condition(delta, cond_1 & cond_2, method = method, bw_divisor = bw_divisor, window = window, eval.points = limits, n = n)
+  a_c_P <- rbind(c(1,1,1,0,0,0), 0, c(0,0,0,1,1,1))
+  out[[paste0(cand_names[1], sep, cand_names[3])]] <- list(
+    integral = pps[1],
+    P = a_c_P
+  )
+  out[[paste0(cand_names[3], sep, cand_names[1])]] <- list(
+    integral = pps[2],
+    P = a_c_P
+  )
+
+  # Condorcet winner event b_c
+  delta <- b_vs_c - c_vs_b
+  delta_adjust <- ifelse(method == "density", delta, 0)
+  cond_1 <- b_vs_a - a_vs_b > 1/n + delta_adjust/2
+  cond_2 <- c_vs_a - a_vs_c > 1/n - delta_adjust/2
+  pps <- pivot_prob_from_delta_and_condition(delta, cond_1 & cond_2, method = method, bw_divisor = bw_divisor, window = window, eval.points = limits, n = n)
+  b_c_P <- rbind(0, c(1,0,1,1,0,0), c(0,1,0,0,1,1))
+  out[[paste0(cand_names[2], sep, cand_names[3])]] <- list(
+    integral = pps[1],
+    P = b_c_P
+  )
+  out[[paste0(cand_names[3], sep, cand_names[2])]] <- list(
+    integral = pps[2],
+    P = b_c_P
+  )
+
+  if(kemeny){
+
+    if(method == "density"){method <- "naive_density"} # not ready for this year
+    forward_cycle <- a_vs_b - b_vs_a > 1/n & b_vs_c - c_vs_b > 1/n & c_vs_a - a_vs_c > 1/n
+    reverse_cycle <- a_vs_b - b_vs_a < 1/n & b_vs_c - c_vs_b < 1/n & c_vs_a - a_vs_c < 1/n
+
+    # ab_forward
+    delta <- a_vs_c - b_vs_a # gap between what a gets in its losing race and what b gets in its losing race
+    delta_adjust <- ifelse(method == "density", delta, 0)
+    cond_1 <- a_vs_c - c_vs_b > 1/n + delta_adjust/2
+    cond_2 <- b_vs_a - c_vs_b > 1/n - delta_adjust/2
+    pps <- pivot_prob_from_delta_and_condition(delta, forward_cycle & cond_1 & cond_2, method = method, bw_divisor = bw_divisor, window = window, eval.points = limits, n = n)
+    out[["ac_ba|abca"]] <- list(
+      integral = pps[1],
+      P = cbind(c(1,0,0), c(1,0,0), c(1,0,0), c(0,1,0), c(1,0,0), c(0,1,0))
+    )
+    out[["ba_ac|abca"]] <- list(
+      integral = pps[2],
+      P = cbind(c(1,0,0), c(1,0,0), c(0,1,0), c(0,1,0), c(0,1,0), c(0,1,0))
+    )
+
+    # ab_reverse
+    delta <- a_vs_b - b_vs_c
+    delta_adjust <- ifelse(method == "density", delta, 0)
+    cond_1 <- a_vs_b - c_vs_a > 1/n + delta_adjust/2
+    cond_2 <- b_vs_c - c_vs_a > 1/n - delta_adjust/2
+    pps <- pivot_prob_from_delta_and_condition(delta, reverse_cycle & cond_1 & cond_2, method = method, bw_divisor = bw_divisor, window = window, eval.points = limits, n = n)
+    out[["ab_bc|bacb"]] <- list(
+      integral = pps[1],
+      P = cbind(c(1,0,0), c(1,0,0), c(0,1,0), c(0,1,0), c(1,0,0), c(1,0,0))
+    )
+    out[["bc_ab|bacb"]] <- list(
+      integral = pps[2],
+      P = cbind(c(0,1,0), c(1,0,0), c(0,1,0), c(0,1,0), c(1,0,0), c(0,1,0))
+    )
+
+    # ac_forward
+    delta <- (a_vs_c - c_vs_b) # gap between what a gets in its losing race and what c gets in its losing race
+    delta_adjust <- ifelse(method == "density", delta, 0)
+    altered_forward_cycle <- a_vs_b - b_vs_a > 1/n & b_vs_c - c_vs_b > 1/n + delta_adjust & c_vs_a - a_vs_c > 1/n - delta_adjust
+    cond_1 <- a_vs_c - b_vs_a > 1/n + delta_adjust/2
+    cond_2 <- c_vs_b - b_vs_a > 1/n - delta_adjust/2
+    pps <- pivot_prob_from_delta_and_condition(delta, altered_forward_cycle & cond_1 & cond_2, method = method, bw_divisor = bw_divisor, window = window, eval.points = limits, n = n)
+    out[["ac_cb|cabc"]] <- list(
+      integral = pps[1],
+      P = cbind(c(1,0,0), c(1,0,0), c(1,0,0), c(1,0,0), c(0,0,1), c(0,0,1))
+    )
+    out[["cb_ac|cabc"]] <- list(
+      integral = pps[2],
+      P = cbind(c(1,0,0), c(0,0,1), c(1,0,0), c(0,0,1), c(0,0,1), c(0,0,1))
+    )
+
+    # ac_reverse
+    delta <- a_vs_b - c_vs_a
+    delta_adjust <- ifelse(method == "density", delta, 0)
+    cond_1 <- a_vs_b - b_vs_c > 1/n + delta_adjust/2
+    cond_2 <- c_vs_a - b_vs_c > 1/n - delta_adjust/2
+    pps <- pivot_prob_from_delta_and_condition(delta, reverse_cycle & cond_1 & cond_2, method = method, bw_divisor = bw_divisor, window = window, eval.points = limits, n = n)
+    out[["ab_ca|acba"]] <- list(
+      integral = pps[1],
+      P = cbind(c(1,0,0), c(1,0,0), c(1,0,0), c(0,0,1), c(1,0,0), c(0,0,1))
+    )
+    out[["ca_ab|acba"]] <- list(
+      integral = pps[2],
+      P = cbind(c(1,0,0), c(1,0,0), c(0,0,1), c(0,0,1), c(0,0,1), c(0,0,1))
+    )
+
+    # bc_forward
+    delta <- b_vs_a  - c_vs_b
+    delta_adjust <- ifelse(method == "density", delta, 0)
+    cond_1 <- b_vs_a - a_vs_c > 1/n + delta_adjust/2
+    cond_2 <- c_vs_b - a_vs_c > 1/n - delta_adjust/2
+    pps <- pivot_prob_from_delta_and_condition(delta, forward_cycle & cond_1 & cond_2, method = method, bw_divisor = bw_divisor, window = window, eval.points = limits, n = n)
+    out[["ba_cb|bcab"]] <- list(
+      integral = pps[1],
+      P = cbind(c(0,1,0), c(0,0,1), c(0,1,0), c(0,1,0), c(0,0,1), c(0,1,0))
+    )
+    out[["cb_ba|bcab"]] <- list(
+      integral = pps[2],
+      P = cbind(c(0,0,1), c(0,0,1), c(0,1,0), c(0,1,0), c(0,0,1), c(0,0,1))
+    )
+
+    # bc_reverse
+    delta <- b_vs_c - c_vs_a
+    delta_adjust <- ifelse(method == "density", delta, 0)
+    cond_1 <- b_vs_c - a_vs_b > 1/n + delta_adjust/2
+    cond_2 <- c_vs_a - a_vs_b > 1/n - delta_adjust/2
+    pps <- pivot_prob_from_delta_and_condition(delta, reverse_cycle & cond_1 & cond_2, method = method, bw_divisor = bw_divisor, window = window, eval.points = limits, n = n)
+    out[["bc_ca|cbac"]] <- list(
+      integral = pps[1],
+      P = cbind(c(0,1,0), c(0,1,0), c(0,1,0), c(0,1,0), c(0,0,1), c(0,0,1))
+    )
+    out[["ca_bc|cbac"]] <- list(
+      integral = pps[2],
+      P = cbind(c(0,1,0), c(0,0,1), c(0,1,0), c(0,0,1), c(0,0,1), c(0,0,1))
+    )
+  }
+
+  out
+
+}
+
+
+#' @rdname standalone_monte_carlo_methods
+#' @export
+condorcet_pivot_probs_from_sims_v0 <- function(sims, n = 1000, window = .01, cand_names = NULL, sep = "_", kemeny = T, method = "density", merge = F, bw_divisor = 1){
 
   if(is.null(cand_names)){
     if(kemeny & (cand_names %>% sort() %>% paste(collapse = "") != "abc")){
@@ -477,6 +684,7 @@ condorcet_pivot_probs_from_sims <- function(sims, n = 1000, window = .01, cand_n
 
   out <- list()
 
+  # Condorcet winner event a_b
   a_b <- mean(a_vs_c > 1/2 & b_vs_c > 1/2 & abs(a_vs_b - 1/2) < window/4)/normalizer
   a_b_P <- rbind(c(1,1,0,0,1,0), c(0,0,1,1,0,1),0)
   out[[paste0(cand_names[1], sep, cand_names[2])]] <- list(

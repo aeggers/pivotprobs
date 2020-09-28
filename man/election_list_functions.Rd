@@ -8,7 +8,7 @@
 \alias{kemeny_young_election}
 \title{Create election list for analysis}
 \usage{
-plurality_election(n = 1000, k = 4, max_pivot_event_degree = 2)
+plurality_election(n = 1000, k = 4, max_pivot_event_degree = 1)
 
 positional_election(n = 1000, s = 0.5)
 

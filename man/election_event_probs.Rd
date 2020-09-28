@@ -18,7 +18,7 @@ election_event_probs(
   cand_names = NULL,
   drop_dimension = F,
   merge_adjacent_pivot_events = F,
-  skip_non_pivot_events = F,
+  skip_non_pivot_events = T,
   skip_compound_pivot_events = T,
   minimum_volume = 0,
   force_condition_based_mc = F,
@@ -28,7 +28,7 @@ election_event_probs(
   ev_increments = 50,
   en_increments_1st_round = 30,
   en_increments_2nd_round = 100,
-  bw_divisor_for_naive = 2,
+  bw_divisor = 2,
   ...
 )
 }
@@ -102,9 +102,10 @@ first-round pivot events in method "en".}
 \item{en_increments_2nd_round}{Increments for numerical integration of
 second-round pivot events in method "en".}
 
-\item{bw_divisor_for_naive}{If ks::hpi determines optimal bandwidth
-for density estimation is h, we use h/bw_divisor_for_naive when
-\code{mc_method="naive_density"}.}
+\item{bw_divisor}{If ks::hpi determines optimal bandwidth
+for density estimation is h, we use h/bw_divisor when
+\code{mc_method="density"} or
+\code{mc_method="naive_density"}. Allows for undersmoothing.}
 }
 \value{
 A list containing one list per election event. Each of these lower-level

@@ -84,9 +84,10 @@
 #' first-round pivot events in method "en".
 #' @param en_increments_2nd_round Increments for numerical integration of
 #' second-round pivot events in method "en".
-#' @param bw_divisor_for_naive If ks::hpi determines optimal bandwidth
-#' for density estimation is h, we use h/bw_divisor_for_naive when
-#' \code{mc_method="naive_density"}.
+#' @param bw_divisor If ks::hpi determines optimal bandwidth
+#' for density estimation is h, we use h/bw_divisor when
+#' \code{mc_method="density"} or
+#' \code{mc_method="naive_density"}. Allows for undersmoothing.
 #'
 #' @return A list containing one list per election event. Each of these lower-level
 #' lists contains
@@ -129,7 +130,7 @@ election_event_probs <- function(election,
                                  cand_names = NULL, # optional
                                  drop_dimension = F,
                                  merge_adjacent_pivot_events = F,
-                                 skip_non_pivot_events = F,
+                                 skip_non_pivot_events = T,
                                  skip_compound_pivot_events = T,
                                  minimum_volume = 0,
                                  force_condition_based_mc = F,
@@ -138,7 +139,7 @@ election_event_probs <- function(election,
                                  ev_increments = 50,
                                  en_increments_1st_round = 30,
                                  en_increments_2nd_round = 100,
-                                 bw_divisor_for_naive = 2,
+                                 bw_divisor = 2,
                                  ... # other arguments to SimplicialCubature::adaptIntegrateSimplex()
                                  ){
 
@@ -225,14 +226,13 @@ election_event_probs <- function(election,
     if(!force_condition_based_mc & election$system %in% c("plurality", "positional", "irv", "kemeny_young")){
       # we use a "standalone" method for simulations, because these are faster
       if(election$system == "plurality"){
-        return(plurality_pivot_probs_from_sims(sims = sims, n = n, window = sim_window, cand_names = cand_names, method = mc_method, merge = merge_adjacent_pivot_events))
+        return(plurality_pivot_probs_from_sims(sims = sims, n = n, window = sim_window, cand_names = cand_names, method = mc_method, merge = merge_adjacent_pivot_events, bw_divisor = bw_divisor, skip_non_pivot_events = skip_non_pivot_events))
       }else if(election$system == "positional"){
-        return(positional_pivot_probs_from_sims(sims = sims, n = n, window = sim_window, cand_names = cand_names, method = mc_method, merge = merge_adjacent_pivot_events, s = election$s))
+        return(positional_pivot_probs_from_sims(sims = sims, n = n, window = sim_window, cand_names = cand_names, method = mc_method, merge = merge_adjacent_pivot_events, s = election$s, bw_divisor = bw_divisor))
       }else if(election$system == "irv"){
-        return(irv_pivot_probs_from_sims(sims = sims, n = n, window = sim_window, cand_names = cand_names, method = mc_method, merge = merge_adjacent_pivot_events, s = election$s))
+        return(irv_pivot_probs_from_sims(sims = sims, n = n, window = sim_window, cand_names = cand_names, method = mc_method, merge = merge_adjacent_pivot_events, s = election$s, bw_divisor = bw_divisor))
       }else if(election$system == "kemeny_young"){
-        # TODO: update this
-        return(condorcet_pivot_probs_from_sims(sims = sims, n = n, window = sim_window, cand_names = cand_names, kemeny = T))
+        return(condorcet_pivot_probs_from_sims(sims = sims, n = n, window = sim_window, cand_names = cand_names, kemeny = T, method = mc_method, merge = merge_adjacent_pivot_events, bw_divisor = bw_divisor))
       }else{
         # if we are using the election conditions -- legacy method, basically
         merge_adjacent_pivot_events <- T
