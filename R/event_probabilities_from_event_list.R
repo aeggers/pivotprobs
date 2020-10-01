@@ -75,7 +75,11 @@
 #' @param store_time By default we store the time each computation takes, in seconds.
 #' @param maxEvals The maximum number of function evaluations to compute an
 #' integral via method "sc" (passed to
-#' \code{SimplicialCubature::adaptIntegrateSimplex()}). If this is exceeded, you still get a result, but it will not be as precise as requested.
+#' \code{SimplicialCubature::adaptIntegrateSimplex()}). If this is exceeded, you still get a result, but it will not be as precise as requested. You
+#' can check whether the limit kicked in by looking at the
+#' `message` attribute of each event probability. To prevent the limit
+#' from binding, the default is a very large value; the computation
+#' may therefore take a very long time.
 #' @param tol The relative error requested in computing an
 #' integral via method "sc" (passed to
 #' \code{SimplicialCubature::adaptIntegrateSimplex()}). For faster imprecise computation (e.g. for testing), set to e.g. .2.
@@ -135,7 +139,7 @@ election_event_probs <- function(election,
                                  minimum_volume = 0,
                                  force_condition_based_mc = F,
                                  store_time = T,
-                                 maxEvals = 100000, tol = .01, # SimplicialCubature arguments
+                                 maxEvals = 1e15, tol = .01, # SimplicialCubature arguments
                                  ev_increments = 50,
                                  en_increments_1st_round = 30,
                                  en_increments_2nd_round = 100,

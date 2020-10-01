@@ -23,7 +23,7 @@ election_event_probs(
   minimum_volume = 0,
   force_condition_based_mc = F,
   store_time = T,
-  maxEvals = 1e+05,
+  maxEvals = 1e+15,
   tol = 0.01,
   ev_increments = 50,
   en_increments_1st_round = 30,
@@ -88,7 +88,11 @@ use the conditions in the election object rather than a faster bespoke method.}
 
 \item{maxEvals}{The maximum number of function evaluations to compute an
 integral via method "sc" (passed to
-\code{SimplicialCubature::adaptIntegrateSimplex()}). If this is exceeded, you still get a result, but it will not be as precise as requested.}
+\code{SimplicialCubature::adaptIntegrateSimplex()}). If this is exceeded, you still get a result, but it will not be as precise as requested. You
+can check whether the limit kicked in by looking at the
+`message` attribute of each event probability. To prevent the limit
+from binding, the default is a very large value; the computation
+may therefore take a very long time.}
 
 \item{tol}{The relative error requested in computing an
 integral via method "sc" (passed to
