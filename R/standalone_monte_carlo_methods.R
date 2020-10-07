@@ -32,6 +32,33 @@
 #'@name standalone_monte_carlo_methods
 NULL
 
+#' @export
+brute_force_mc_eep <- function(num_sims = 10000000, batch_size = 500000, alpha = c(10, 9, 4), election_method = "plurality", n = 1000, s = NULL){
+  if(election_method == "positional" & is.null(s)){stop("You must provide a value for `s` if `election_method=positional`.")}
+  if(!is.null(s) && !(s >=0 & s<=1)){stop("s must be between 0 and 1.")}
+  sims_so_far <- 0
+  count_df_list <- list()
+  i <- 1
+  while(sims_so_far < num_sims){
+    cat(".")
+    this_batch_size <- min(batch_size, num_sims - sims_so_far)
+    sims <- gtools::rdirichlet(this_batch_size, alpha)
+    f <- str_c(election_method, "_event_probs_from_sims") %>% get()
+    these_counts <- f(sims, method = "rectangular", skip_non_pivot_events = F, window = 1/n, s = s, raw = T) %>%
+      map("integral")
+    this_count_df <- tibble(event = names(these_counts), tally = these_counts %>% unlist() %>% as.numeric())
+    count_df_list[[i]] <- this_count_df
+    sims_so_far <- sims_so_far + this_batch_size
+    i <- i + 1
+  }
+  cat("\n")
+  bind_rows(count_df_list) %>%
+    group_by(event) %>%
+    summarize(tally = sum(tally)) %>%
+    ungroup() %>%
+    mutate(prob = tally/sum(tally))
+}
+
 density_estimate <- function(x, bw_divisor = 1, eval.points = c(0)){
   if(length(x) <= 1){return(rep(0, length(eval.points)))} # can't get a bandwidth with only 1 point
   bw <- ks::hpi(x, binned = T)/bw_divisor
@@ -39,7 +66,8 @@ density_estimate <- function(x, bw_divisor = 1, eval.points = c(0)){
 }
 
 # this is a better general approach, but I developed after implementing the other way, so only applied to Condorcet
-pivot_prob_from_delta_and_condition <- function(delta, condition, method = "density", bw_divisor = 1, window = .01, eval.points = c(0,0), n = 1000){
+pivot_prob_from_delta_and_condition <- function(delta, condition, method = "density", bw_divisor = 1, window = .01, n = 1000, eval.points = c(0,0)){
+
   if(method == "rectangular"){
     rep(mean(condition & abs(delta) < window/2)/(n*window), 2)
   }else if(method %in% c("naive_density", "density")){
@@ -49,15 +77,49 @@ pivot_prob_from_delta_and_condition <- function(delta, condition, method = "dens
   }
 }
 
+# making more general
+pivot_prob_from_delta_and_condition2 <- function(delta, condition, method = "density", bw_divisor = 1, window = .01, n = 1000, drop = T, merge = F, raw = F, increments = 10){
+  if(method == "rectangular"){
+    offset <- ifelse(merge, 0, 1/(2*n))
+    cond1 <- condition & abs(delta - offset) < window/2
+    if(merge){
+      cond2 <- cond1
+    }else{
+      cond2 <- cond & abs(delta + offset) < window/2
+    }
+    if(raw){c(sum(cond1), sum(cond2))}else{mean(c(cond1, cond2))/(window*n)}
+  }else if(method %in% c("naive_density", "density")){
+    limits1 <- c(0, 1/n)
+    if(merge){limits1 <- limits1 - 1/(2*n)}
+    if(drop){increments <- 1}
+    som1 <- sequence_of_midpoints(limits1[1], limits1[2], increments = increments)
+    if(drop){grid_width <- limits1[2] - limits1[1]}else{grid_width <- som1[2] - som1[1]}
+    prob1 <- mean(condition)*sum(density_estimate(delta[condition], bw_divisor = bw_divisor, eval.points = som1))*grid_width
+    if(merge){
+      prob2 <- prob1
+    }else{
+      limits2 <- c(-1/n, 0)
+      som2 <- sequence_of_midpoints(limits2[1], limits2[2], increments = increments)
+      if(drop){grid_width <- limits2[2] - limits2[1]}else{grid_width <- som2[2] - som2[1]}
+      prob2 <- mean(condition)*sum(density_estimate(delta[condition], bw_divisor = bw_divisor, eval.points = som2))*grid_width
+    }
+    c(prob1, prob2)
+  }else{
+    stop("Unknown method for estimating density.")
+  }
+}
+
+
 #' @rdname standalone_monte_carlo_methods
 #' @export
-plurality_pivot_probs_from_sims <- function(sims = NULL, n = 1000, window = .01, cand_names = NULL, sep = "_", method = "density", merge = F, bw_divisor = 1, skip_non_pivot_events = T){
+plurality_event_probs_from_sims <- function(sims = NULL, n = 1000, window = .01, cand_names = NULL, sep = "_", method = "density", merge = F, drop = F, bw_divisor = 1, skip_non_pivot_events = T, s = NULL, raw = F){
 
   out <- list()
   if(is.null(cand_names)){cand_names <- letters[1:ncol(sims)]}
+  if(is.null(sims)){stop("You need to provide `sims`.")}
   for(i in 1:(ncol(sims)-1)){
     for(j in (i+1):ncol(sims)){
-      pp <- ab_plurality_tie_for_first_from_sims(cbind(sims[,c(i,j), drop = F], sims[,-c(i,j), drop = F]), method = method, n = n, merge = merge, window = window, bw_divisor = bw_divisor)
+      pp <- ab_plurality_tie_for_first_from_sims(cbind(sims[,c(i,j), drop = F], sims[,-c(i,j), drop = F]), method = method, n = n, merge = merge, drop = drop, window = window, bw_divisor = bw_divisor, raw = raw)
       out[[paste0(cand_names[i], sep, cand_names[j])]] <- list(
         integral = pp[1],
         P = plurality_P_matrix_from_indices(i,j,ncol(sims))
@@ -70,13 +132,13 @@ plurality_pivot_probs_from_sims <- function(sims = NULL, n = 1000, window = .01,
   }
 
   if(!skip_non_pivot_events){
-    row_maxes <- apply(sims, 1, max)
+    # row_maxes <- apply(sims, 1, max)
     empty_P <- matrix(0, nrow = length(cand_names), ncol = length(cand_names))
     for(i in 1:ncol(sims)){
       this_P <- empty_P
       this_P[i,] <- 1
       out[[paste0(cand_names[i], "_")]] <- list(
-        integral = mean(sims[,i] == row_maxes),
+        integral = a_wins_from_sims_prob(sims = cbind(sims[,i,drop=F], sims[,-i,drop=F]), n = n, raw = raw),
         P = this_P)
     }
   }
@@ -91,13 +153,32 @@ plurality_P_matrix_from_indices <- function(i,j,k){
   out
 }
 
-ab_plurality_tie_for_first_from_sims <- function(sims, method = "density", n = 1000, merge = F, window = .01, bw_divisor = 1){
+a_wins_from_sims_prob <- function(sims, n = 1000, raw = F){
+  cond <- rep(T, nrow(sims))
+  for(j in 2:ncol(sims)){
+    cond <- cond & sims[,1] - sims[,j] - 1/n > 0
+  }
+  if(raw){sum(cond)}else{mean(cond)}
+}
+
+sequence_of_midpoints <- function(from = NULL, to = NULL, increments = 10){
+  boundary_cuts <- seq(from, to, length = increments + 1)
+  boundary_cuts[-(increments + 1)] + mean(boundary_cuts[1:2])
+}
+
+ab_plurality_tie_for_first_from_sims_old_and_broken <- function(sims, method = "density", n = 1000, merge = F, drop = F, increments = 10, window = .01, bw_divisor = 1, raw = F){
 
   if(method %in% c("density", "naive_density")){
-    if(merge){
-      limits <- c(0,0)
+    if(drop){
+      if(merge){
+        eval.points <- c(0,0)
+      }else{
+        eval.points <- c(1, -1)/(2*n)
+      }
     }else{
-      limits <- c(1, -1)/(2*n)
+      if(merge){
+        eval.points
+      }
     }
     if(method == "density"){
       cond <- rep(T, nrow(sims))
@@ -113,16 +194,21 @@ ab_plurality_tie_for_first_from_sims <- function(sims, method = "density", n = 1
     }
     the_density <- density_estimate(x = (sims[,1] - sims[,2])[cond], eval.points = limits, bw_divisor = bw_divisor)
     mean(cond)*the_density*(1/n)
-    # mean(cond)*ks::kde(x = (sims[,1] - sims[,2])[cond], eval.points = limits)$estimate*(1/n)
   }else if(method == "rectangular"){
     cond <- rep(T, nrow(sims))
     for(j in 3:ncol(sims)){
-      cond <- cond & (sims[,j] < sims[,1] - 1/n & sims[,j] < sims[,2] - 1/n)
+      # everyone else is at least 1/n behind either a or b.
+      cond <- cond & (sims[,j] < sims[,1] - 1/n | sims[,j] < sims[,2] - 1/n)
     }
-    pp <- mean(cond & abs(sims[,1] - sims[,2]) < window/2)/(window*n)
-    # row_max <- apply(sims, 1, max)
-    # pp <- mean((sims[,1] == row_max | sims[,2] == row_max) & abs(sims[,1] - sims[,2]) < window/2)/(window*n)
-    c(pp, pp) # merge by default
+    offset <- ifelse(merge, 0, 1/(2*n))
+    # a is within `window`/2 of being `offset` (either 1/2n or 0, depending on `merge`) ahead of b
+    cond1 <- cond & abs(sims[,1] - sims[,2] - offset) < window/2
+    if(merge){
+      cond2 <- cond1
+    }else{
+      cond2 <- cond & abs(sims[,1] - sims[,2] + offset) < window/2
+    }
+    if(raw){c(sum(cond1), sum(cond2))}else{mean(c(cond1, cond2))/(window*n)}
   }else{
     stop("Unknown method for plurality pivot prob estimation: ", method, "\n")
   }
@@ -130,9 +216,68 @@ ab_plurality_tie_for_first_from_sims <- function(sims, method = "density", n = 1
 }
 
 
+ab_plurality_tie_for_first_from_sims <- function(sims, method = "density", n = 1000, merge = F, drop = F, increments = 10, window = .01, bw_divisor = 1, raw = F){
+
+  delta <- sims[,1] - sims[,2]
+  cond <- rep(T, nrow(sims))
+  if(method == "density"){
+    sum_12 <- sims[,1] + sims[,2]
+    for(j in 3:ncol(sims)){
+      cond <- cond & (sims[,j] < sum_12/2 - 1/n)
+    }
+  }else if(method == "naive_density"){
+    for(j in 3:ncol(sims)){
+      cond <- cond & (sims[,j] < sims[,1] - 1/n & sims[,j] < sims[,2] - 1/n)
+    }
+  }else if(method == "rectangular"){
+    for(j in 3:ncol(sims)){
+      # everyone else is at least 1/n behind either a or b.
+      cond <- cond & (sims[,j] < sims[,1] - 1/n | sims[,j] < sims[,2] - 1/n)
+    }
+  }else{
+    stop("Unknown method for plurality pivot prob estimation: ", method, "\n")
+  }
+
+  pivot_prob_from_delta_and_condition2(delta, cond, method = method, bw_divisor = bw_divisor, window = window, n = n, drop = drop, merge = merge, raw = raw, increments = increments)
+
+}
+
+
+winner_name <- function(v, cand_names){
+  cand_names[which(v == max(v))]
+}
+
+runner_up_names <- function(v, cand_names, n){
+  cand_names[which(max(v) > v & max(v) - v < 1/n)] %>%
+    sort() %>%
+    paste(collapse = "")
+}
+
+# this method takes a very long time and is plurality-specific -- not used
+plurality_mc_accounting <- function(alpha = c(10, 9, 6), num_sims = 10000000, sims_increment = 500000, n = 1000, cand_names = NULL, raw = F){
+  if(is.null(cand_names)){cand_names <- letters[1:length(alpha)]}
+  increments <- ceiling(num_sims/sims_increment)
+  cat(increments, " to go through.\n")
+  all_types <- c()
+  for(i in 1:increments){
+    cat(".")
+    sims <- gtools::rdirichlet(sims_increment, alpha)
+    winner_names <- apply(sims, 1, winner_name, cand_names = cand_names)
+    runner_up_names <- apply(sims, 1, runner_up_names, cand_names = cand_names, n = n)
+   all_types <- c(all_types, paste0(winner_names, "_", runner_up_names))
+  }
+  cat("done.\n")
+  if(raw){return(all_types)}
+  out <- list()
+  for(type in unique(all_types)){
+    out[[type]] <- sum(all_types == type)/length(all_types)
+  }
+  out
+}
+
 #' @rdname standalone_monte_carlo_methods
 #' @export
-positional_pivot_probs_from_sims <- function(sims, window = .01, n = 1000, s = .5, cand_names = NULL, sep = "_", method = "density", merge = F, bw_divisor = 1){
+positional_event_probs_from_sims <- function(sims, window = .01, n = 1000, s = .5, cand_names = NULL, sep = "_", method = "density", merge = F, drop = F, increments = 10, bw_divisor = 1, skip_non_pivot_events = T, raw = F){
 
   if(ncol(sims) != 6){
     stop("sims must have 6 columns.")
@@ -159,7 +304,7 @@ positional_pivot_probs_from_sims <- function(sims, window = .01, n = 1000, s = .
         c(0,0,1-s,1,0,s),
         0)
 
-  ab <- positional_pivot_probs_12_from_scores(score_a, score_b, score_c, method = method, n = n, merge = merge, window = window, bw_divisor = bw_divisor)
+  ab <- ab_plurality_tie_for_first_from_sims(sims = cbind(score_a, score_b, score_c), method = method, n = n, merge = merge, drop = drop, increments = increments, window = window, bw_divisor = bw_divisor, raw = raw)
 
   out[[paste0(cand_names[1], sep, cand_names[2])]] <- list(
     integral = ab[1],
@@ -170,7 +315,7 @@ positional_pivot_probs_from_sims <- function(sims, window = .01, n = 1000, s = .
     list(integral = ab[2],
          P = ab_P[c(2,1,3), c(3,4,1,2,6,5)])
 
-  ac <- positional_pivot_probs_12_from_scores(score_a, score_c, score_b, method = method, n = n, merge = merge, window = window, bw_divisor = bw_divisor)
+  ac <- ab_plurality_tie_for_first_from_sims(sims = cbind(score_a, score_c, score_b), method = method, n = n, merge = merge, drop = drop, increments = increments, window = window, bw_divisor = bw_divisor, raw = raw)
 
   out[[paste0(cand_names[1], sep, cand_names[3])]] <- list(
     integral = ac[1],
@@ -181,7 +326,7 @@ positional_pivot_probs_from_sims <- function(sims, window = .01, n = 1000, s = .
     list(integral = ac[2],
          P = ab_P[c(2,3,1), c(4,3, 6,5, 1,2)])
 
-  bc <- positional_pivot_probs_12_from_scores(score_b, score_c, score_a, method = method, n = n, merge = merge, window = window, bw_divisor = bw_divisor)
+  bc <- ab_plurality_tie_for_first_from_sims(sims = cbind(score_b, score_c, score_a), method = method, n = n, merge = merge, drop = drop, increments = increments, window = window, bw_divisor = bw_divisor, raw = raw)
 
   out[[paste0(cand_names[2], sep, cand_names[3])]] <-
     list(integral = bc[1],
@@ -191,11 +336,24 @@ positional_pivot_probs_from_sims <- function(sims, window = .01, n = 1000, s = .
     list(integral = bc[2],
          P = ab_P[c(3,2,1), c(6,5,4,3,2,1)])
 
+  if(!skip_non_pivot_events){
+    score_sims <- cbind(score_a, score_b, score_c)
+    empty_P <- matrix(0, nrow = 3, ncol = 6)
+    for(i in 1:3){
+      this_P <- empty_P
+      this_P[i,] <- 1
+      out[[paste0(cand_names[i], "_")]] <- list(
+        integral = a_wins_from_sims_prob(sims = cbind(score_sims[,i,drop=F], score_sims[,-i,drop=F]), n = n, raw = raw),
+        P = this_P)
+    }
+  }
+
   out
 
 }
 
-positional_pivot_probs_12_from_scores <- function(score_1, score_2, score_3, method = "density", n = 1000, merge = F, window = .01, bw_divisor = 1){
+# this is no longer used -- plurality method suffices.
+positional_pivot_probs_12_from_scores <- function(score_1, score_2, score_3, method = "density", n = 1000, merge = F, window = .01, bw_divisor = 1, raw = F){
   # returns a pair of results, the first for 1 being ahead of 2, the second for 2 being ahead of 1 (these are the same for merge = T or method = "rectangular")
   # methods: "density", "naive_density", "rectangular"
   # easily extended to more candidates.
@@ -215,8 +373,15 @@ positional_pivot_probs_12_from_scores <- function(score_1, score_2, score_3, met
     the_density <- density_estimate(x = (score_1 - score_2)[cond], eval.points = limits, bw_divisor = bw_divisor)
     mean(cond)*the_density*(1/n)
   }else if(method == "rectangular"){
-    pp <- mean(abs(score_1 - score_2) < window/2 & score_1 - score_3 > 1/n & score_2 - score_3 > 1/n)/(n*window)
-    c(pp, pp) # merge by default
+    cond <- score_1 - score_3 > 1/n | score_2 - score_3 > 1/n
+    offset <- ifelse(merge, 0, 1/(2*n))
+    cond1 <- cond & abs(score_1 - score_2 - offset) < window/2
+    if(merge){
+      cond2 <- cond1
+    }else{
+      cond2 <- cond & abs(score_1 - score_2 + offset) < window/2
+    }
+    if(raw){c(sum(cond1), sum(cond2))}else{mean(c(cond1, cond2))/(window*n)}
   }else{
     stop("Unknown method for positional pivot prob estimation: ", method, "\n")
   }
@@ -225,7 +390,7 @@ positional_pivot_probs_12_from_scores <- function(score_1, score_2, score_3, met
 
 #' @rdname standalone_monte_carlo_methods
 #' @export
-irv_pivot_probs_from_sims <- function(sims, window = .01, n = 1000, s = 0, cand_names = NULL, sep = "_", method = "density", merge = F, bw_divisor = 1){
+irv_event_probs_from_sims <- function(sims, window = .01, n = 1000, s = 0, cand_names = NULL, sep = "_", method = "density", merge = F, bw_divisor = 1){
 
   if(ncol(sims) != 6){
     stop("sims must have 6 columns.")
@@ -480,7 +645,7 @@ irv_first_round_pivot_probs_ab <- function(score_a, score_b, score_c, a_vs_c, b_
 
 #' @rdname standalone_monte_carlo_methods
 #' @export
-condorcet_pivot_probs_from_sims <- function(sims, n = 1000, window = .01, cand_names = NULL, sep = "_", kemeny = T, method = "density", merge = F, bw_divisor = 1){
+condorcet_event_probs_from_sims <- function(sims, n = 1000, window = .01, cand_names = NULL, sep = "_", kemeny = T, method = "density", merge = F, bw_divisor = 1, s = NULL){
 
   if(is.null(cand_names)){
     if(kemeny & !is.null(cand_names) & (cand_names %>% sort() %>% paste(collapse = "") != "abc")){

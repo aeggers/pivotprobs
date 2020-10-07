@@ -2,14 +2,14 @@
 % Please edit documentation in R/standalone_monte_carlo_methods.R
 \name{standalone_monte_carlo_methods}
 \alias{standalone_monte_carlo_methods}
-\alias{plurality_pivot_probs_from_sims}
-\alias{positional_pivot_probs_from_sims}
-\alias{irv_pivot_probs_from_sims}
-\alias{condorcet_pivot_probs_from_sims}
+\alias{plurality_event_probs_from_sims}
+\alias{positional_event_probs_from_sims}
+\alias{irv_event_probs_from_sims}
+\alias{condorcet_event_probs_from_sims}
 \alias{condorcet_pivot_probs_from_sims_v0}
 \title{Faster Monte Carlo estimation of pivot probabilities}
 \usage{
-plurality_pivot_probs_from_sims(
+plurality_event_probs_from_sims(
   sims = NULL,
   n = 1000,
   window = 0.01,
@@ -21,7 +21,7 @@ plurality_pivot_probs_from_sims(
   skip_non_pivot_events = T
 )
 
-positional_pivot_probs_from_sims(
+positional_event_probs_from_sims(
   sims,
   window = 0.01,
   n = 1000,
@@ -33,7 +33,7 @@ positional_pivot_probs_from_sims(
   bw_divisor = 1
 )
 
-irv_pivot_probs_from_sims(
+irv_event_probs_from_sims(
   sims,
   window = 0.01,
   n = 1000,
@@ -45,7 +45,7 @@ irv_pivot_probs_from_sims(
   bw_divisor = 1
 )
 
-condorcet_pivot_probs_from_sims(
+condorcet_event_probs_from_sims(
   sims,
   n = 1000,
   window = 0.01,

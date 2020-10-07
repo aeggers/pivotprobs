@@ -230,13 +230,13 @@ election_event_probs <- function(election,
     if(!force_condition_based_mc & election$system %in% c("plurality", "positional", "irv", "kemeny_young")){
       # we use a "standalone" method for simulations, because these are faster
       if(election$system == "plurality"){
-        return(plurality_pivot_probs_from_sims(sims = sims, n = n, window = sim_window, cand_names = cand_names, method = mc_method, merge = merge_adjacent_pivot_events, bw_divisor = bw_divisor, skip_non_pivot_events = skip_non_pivot_events))
+        return(plurality_event_probs_from_sims(sims = sims, n = n, window = sim_window, cand_names = cand_names, method = mc_method, merge = merge_adjacent_pivot_events, bw_divisor = bw_divisor, skip_non_pivot_events = skip_non_pivot_events))
       }else if(election$system == "positional"){
-        return(positional_pivot_probs_from_sims(sims = sims, n = n, window = sim_window, cand_names = cand_names, method = mc_method, merge = merge_adjacent_pivot_events, s = election$s, bw_divisor = bw_divisor))
+        return(positional_event_probs_from_sims(sims = sims, n = n, window = sim_window, cand_names = cand_names, method = mc_method, merge = merge_adjacent_pivot_events, s = election$s, bw_divisor = bw_divisor))
       }else if(election$system == "irv"){
-        return(irv_pivot_probs_from_sims(sims = sims, n = n, window = sim_window, cand_names = cand_names, method = mc_method, merge = merge_adjacent_pivot_events, s = election$s, bw_divisor = bw_divisor))
+        return(irv_event_probs_from_sims(sims = sims, n = n, window = sim_window, cand_names = cand_names, method = mc_method, merge = merge_adjacent_pivot_events, s = election$s, bw_divisor = bw_divisor))
       }else if(election$system == "kemeny_young"){
-        return(condorcet_pivot_probs_from_sims(sims = sims, n = n, window = sim_window, cand_names = cand_names, kemeny = T, method = mc_method, merge = merge_adjacent_pivot_events, bw_divisor = bw_divisor))
+        return(condorcet_event_probs_from_sims(sims = sims, n = n, window = sim_window, cand_names = cand_names, kemeny = T, method = mc_method, merge = merge_adjacent_pivot_events, bw_divisor = bw_divisor))
       }else{
         # if we are using the election conditions -- legacy method, basically
         merge_adjacent_pivot_events <- T
