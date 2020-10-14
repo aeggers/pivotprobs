@@ -7,7 +7,7 @@
 #' \itemize{
 #' \item a scalar \code{integral} indicating the probability of the event,
 #' \item a matrix \code{P}  indicating which candidate elected (rows) as a
-#' function of which extra ballot is submitted at this event (columns), and
+#' function of which action the voter takes (columns), and
 #' \item other objects depending on the method used to compute the event probabilities.}
 #'
 #' There are four methods for computing the probability of a given election event:
@@ -83,6 +83,8 @@
 #' @param tol The relative error requested in computing an
 #' integral via method "sc" (passed to
 #' \code{SimplicialCubature::adaptIntegrateSimplex()}). For faster imprecise computation (e.g. for testing), set to e.g. .2.
+#' @param eval_points_for_1d_integral Sets the \code{subdivisions} argument to \code{integrate()} when
+#' \code{SimplicialCubature::adaptIntegrateSimplex()} will be performed on a line.
 #' @param ev_increments Increments for numerical integration in method "ev".
 #' @param en_increments_1st_round Increments for numerical integration of
 #' first-round pivot events in method "en".
@@ -98,7 +100,7 @@
  #'\itemize{
 #' \item \code{integral} the event probability
 #' \item \code{P} the election probability matrix, indicating which candidate (rows)
-#' is elected at this event depending on which extra ballot (columns) is submitted.
+#' is elected at this event depending on which action (columns) the voter takes.
 #' \item \code{seconds_elapsed} the time to compute this event probability.
 #' }
 #' For method "sc" these event-specific lists include other output from \code{SimplicialCubature::adaptIntegrateSimplex()}, such as \code{functionEvaluations} and \code{message}.
@@ -139,7 +141,7 @@ election_event_probs <- function(election,
                                  minimum_volume = 0,
                                  force_condition_based_mc = F,
                                  store_time = T,
-                                 maxEvals = 1e15, tol = .01, # SimplicialCubature arguments
+                                 maxEvals = .Machine$integer.max, tol = .01, eval_points_for_1d_integral = 100, # SimplicialCubature arguments
                                  ev_increments = 50,
                                  en_increments_1st_round = 30,
                                  en_increments_2nd_round = 100,
@@ -167,9 +169,6 @@ election_event_probs <- function(election,
   if(is.null(ordinal)){stop("election$ordinal must be specified so that we know whether this is an ordinal voting method or not.")}
   n <- election$n
   if(is.null(n)){stop("election$n must be specified so that we know the electorate size (which affects limits of integration and normalization factors.")}
-
-  # for the limits we define below, we want the value of one vote in terms of vote share, i.e. 1/n.
-  base_limit <- 1/n
 
   # storage for output
   out <- list()
@@ -230,7 +229,7 @@ election_event_probs <- function(election,
     if(!force_condition_based_mc & election$system %in% c("plurality", "positional", "irv", "kemeny_young")){
       # we use a "standalone" method for simulations, because these are faster
       if(election$system == "plurality"){
-        return(plurality_event_probs_from_sims(sims = sims, n = n, window = sim_window, cand_names = cand_names, method = mc_method, merge = merge_adjacent_pivot_events, bw_divisor = bw_divisor, skip_non_pivot_events = skip_non_pivot_events))
+        return(plurality_event_probs_from_sims(sims = sims, n = n, window = sim_window, cand_names = cand_names, method = mc_method, drop = drop_dimension, merge = merge_adjacent_pivot_events, bw_divisor = bw_divisor, skip_non_pivot_events = skip_non_pivot_events))
       }else if(election$system == "positional"){
         return(positional_event_probs_from_sims(sims = sims, n = n, window = sim_window, cand_names = cand_names, method = mc_method, merge = merge_adjacent_pivot_events, s = election$s, bw_divisor = bw_divisor))
       }else if(election$system == "irv"){
@@ -245,12 +244,13 @@ election_event_probs <- function(election,
     }
   }
 
+  # for the limits we define below, we want the value of one vote in terms of vote share, i.e. 1/n.
+  base_limit <- 1/n
+
   # set limits (width of integration region) based on method and arguments
   if(method %in% mc_method_names){
-    # in monte carlo, we check whether the key condition (e.g. v_i - v_j) is within the interval `limits``
-    # typically the interval is much wider than 1/n, so we can't get distinct estimates for adjacent pivot events.
+    # legacy: if we are using the election conditions to do Monte Carlo, we are using the rectangular method, merging adjacent, and just counting cases where the key margin is between -1/(2*sim_window) and 1/(2*sim_window)
     limits <- (sim_window/2)*c(-1, 1)
-    # ultimately could have a more sophisticated approach with kernel density estimation, and separate estimates on each side. kind of tempting as it would also be more efficient.
   }else if(merge_adjacent_pivot_events & drop_dimension){
     limits <- c(0, 0) # only first limit used -- a line at the boundary
   }else if(merge_adjacent_pivot_events){
@@ -289,6 +289,13 @@ election_event_probs <- function(election,
   # the S_array is the key input to SimplicialCubature::adaptIntegrateSimplex.
   S_list <- list()
 
+  ## Special case: if we're going to be doing a line integral, we need maxEvals to not be so high
+  # Would be better if condition were based on S rather than election method, but S could in principle be an array including lines and other things.
+  if(election$system == "plurality" && election$k == 3 & drop_dimension == T){
+    # cat("Setting maxEvals to lower number to avoid passing subdivisions=NA to integrate().")
+    maxEvals <- eval_points_for_1d_integral*21L
+  }
+
   # now we permute through possible orderings of candidates
   for(p_row in 1:nrow(candidate_permutation_mat)){
     cand_vector <- candidate_permutation_mat[p_row,]  # e.g. c("c", "a", "b")
@@ -300,10 +307,10 @@ election_event_probs <- function(election,
       # these are the indices for reordering the parameters such that e.g. c becomes i, a becomes j, b becomes k.
       ballot_param_indexes <- obv %>% names() %>% as.numeric()   # (5, 6, 2, 1, 4, 3)
       # these are the indices for reordering the ballots in the P matrix
-      ballot_order <- order(obv) #TODO: fix this
+      ballot_order <- c(order(obv), length(obv) + 1)
     }else{
       ballot_param_indexes <- cand_param_indexes  # (3, 1, 2)
-      ballot_order <- cand_order                  # (2, 3, 1)
+      ballot_order <- c(cand_order, length(cand_order) + 1)                  # (2, 3, 1, 4)
     }
 
     if(class(election$events) != "list"){
@@ -333,7 +340,7 @@ election_event_probs <- function(election,
       scaling_factor <- this_event$scaling_factor
       if(is.null(scaling_factor)){scaling_factor <- 1}
 
-      # we need to convert the generic_event_name (e.g. i_j) to a specific nam (e.g. c_a) based on the permutation
+      # we need to convert the generic_event_name (e.g. i_j) to a specific name (e.g. c_a) based on the permutation
       # a function I use twice here. uses local variables in definition.
       turn_generic_to_specific <- function(generic_event_name){
         generic_event_name %>%
@@ -419,6 +426,8 @@ election_event_probs <- function(election,
           }else{
             # compute the integral
             if(distribution == "dirichlet"){
+              # for error diagnosis, output the arguments we pass to SimplicialCubature
+              # if(election$system == "irv"){cat("Saving arguments for ", generic_event_name, ".\n"); save(generic_event_name, alpha, ballot_param_indexes, maxEvals, this_S, tol, file = paste0("~/Dropbox/research/strategic_voting/pivotprobs_paper/data/this_S_etc_n_", generic_event_name, "_", election$n, ".RData"))}
               out[[specific_event_name]] <- SimplicialCubature::adaptIntegrateSimplex(f = dirichlet_for_integration, S = this_S, alpha = alpha[ballot_param_indexes], maxEvals = maxEvals, tol = tol, ...)
               # when we allowed drop_dimension for compound pivot events, we would get a point (e.g. at a_bc for k = 3). adaptIntegrateSimplex didn't know what to do, so we had to specify "give me the density at the point":
               #         out[[specific_event_name]] <- list(integral = gtools::ddirichlet(as.vector(this_S), alpha[ballot_order])/sqrt(length(alpha)), functionEvaluations = 1, message = "OK")
@@ -458,6 +467,7 @@ election_event_probs <- function(election,
           }
         }else if(method %in% mc_method_names){
           # Monte Carlo simulation
+          # this code is elegant but slow so not used.
           # get the event conditions as stated in the event_list
           this_im <- this_event$win_conditions
           C_mat <- this_im[,-ncol(this_im)] # take off the vector of constants (1/n) -- we are checking Ax >= 0. Could change that -- would make a tiny difference.

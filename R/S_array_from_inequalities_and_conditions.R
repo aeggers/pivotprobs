@@ -70,6 +70,12 @@ S_array_from_inequalities_and_conditions <- function(inequality_mat, rows_to_alt
     warning("Results are unreliable when dropping a dimension on a compound pivot event (i.e. when multiple rows_to_alter).")
   }
 
+  if(length(rows_to_alter) >= 1){
+    # the inequality mat specifies conditions where the guy wins outright, so the rows_to_alter constant is typically 1/n.
+    # when we alter conditions we go from limits[1] to limits[2]
+    inequality_mat[rows_to_alter, ncol(inequality_mat)] <- limits[1]
+  }
+
   # reformat the inequality matrix  and add the simplex constraints ####
   a1_mat <- inequality_mat[ ,-ncol(inequality_mat)]
   b1_vec <- inequality_mat[ ,ncol(inequality_mat)]
@@ -81,8 +87,10 @@ S_array_from_inequalities_and_conditions <- function(inequality_mat, rows_to_alt
   # the simplex equality condition
   a2_mat <- matrix(1, nrow = 1, ncol = ncol(a1_mat))
   b2_vec <- c(1)
+  # it would make sense to apply an equality condition when drop_dimension=T,
+  # but this doesn't work with the tesselation.
 
-  if(!drop_dimension & length(rows_to_alter) >= 1){
+  if(!drop_dimension & length(rows_to_alter) >= 1){ #i.e. if this is a pivot event and we are not dropping a dimension
     if(is.null(limits[2])){
       stop("If not dropping a dimension, you must provide upper and lower limits, e.g. 0 and 1/n.")
     }
@@ -93,7 +101,6 @@ S_array_from_inequalities_and_conditions <- function(inequality_mat, rows_to_alt
     # the current conditions are a1[rta,] v \geq b1[rta]
     # we need to convert these to a1[rta,] v \geq limits[1]
     # and add one that is a1[rta,] v \leq b1[rta]
-    b1_vec[rows_to_alter] <- -limits[1] # recycling
     a1_mat <- rbind(a1_mat, -a1_mat[rows_to_alter, ]) # add some \leq conditions
     b1_vec <- c(b1_vec, rep(limits[2], length(rows_to_alter)))
   }
@@ -101,8 +108,12 @@ S_array_from_inequalities_and_conditions <- function(inequality_mat, rows_to_alt
   # get the H representation -- this is just a reformatting
   the_Hrep <- rcdd::makeH(a1 = a1_mat, b1 = b1_vec, a2 = a2_mat, b2 = b2_vec)
 
+  # if(save_it){save(the_Hrep, file = paste0("~/Dropbox/research/strategic_voting/pivotprobs_paper/data/the_Hrep.RData"))}
+
+  # rational arithmetic! very fun.
+  the_Vrep <- rcdd::d2q(the_Hrep) %>% rcdd::scdd()
   # get the vertices of the convex hull from H representation
-  all_vertices <- rcdd::scdd(the_Hrep)$output[,-c(1,2)]
+  all_vertices <- the_Vrep$output[,-c(1,2)] %>% rcdd::q2d()
 
   # if user passes a set of conditions that cannot be met
   if(nrow(all_vertices) == 0){
@@ -110,11 +121,13 @@ S_array_from_inequalities_and_conditions <- function(inequality_mat, rows_to_alt
     return (NULL)
   }
 
+  # if(save_it){save(all_vertices, file = paste0("~/Dropbox/research/strategic_voting/pivotprobs_paper/data/all_vertices.RData"))}
+
   # get the tesselated/triangulated convex hull (tch)
   # this is a matrix with one row per triangle
   # if a row is c(3, 1, 2), it means rows 3, 1, and 2 of the input make one of the triangles.
-  # not the same as geometry::convhulln(), which I had used before, though I don't see the difference
   if(!(drop_dimension & length(rows_to_alter) >= 1)){
+    # i.e. if we are not dropping a dimension, or this is not a pivot event
     # we are integrating over a D-1 dimensional space, e.g. for plurality with 3 candidates we have 2-dimensional areas to integrate over. we triangulate and return an array of these triangles.
     N <- ncol(all_vertices) - 1
     QzQx <- ifelse(N >= 4, "Qx", "Qz")
@@ -123,13 +136,14 @@ S_array_from_inequalities_and_conditions <- function(inequality_mat, rows_to_alt
   }else{
     # we are integrating on at most D-2 dimensional facets, e.g. for plurality with 3 candidates we have a line or even a point. we triangulate the convex hull, look for facets that meet the conditions, and return an array of those triangles.
     tch <- geometry::convhulln(all_vertices[,-ncol(all_vertices)], options = paste("Tv", qhull_options, sep = " "))
-    # check which vertices satisfy the conditions
+    # check which vertices satisfy the conditions with equality
     # all_vertices is V by B, relevant part of inequality_mat is rows_to_alter by V+1
-    condition_matrix <- inequality_mat[rows_to_alter,-ncol(inequality_mat)]
-    if(!is.matrix(condition_matrix)){
-      condition_matrix <- matrix(condition_matrix, nrow = length(rows_to_alter), ncol = ncol(inequality_mat) - 1)
-    }
-    deviations <- all_vertices %*% t(condition_matrix) - matrix(inequality_mat[rows_to_alter,ncol(inequality_mat)], nrow = nrow(all_vertices), ncol = length(rows_to_alter), byrow = T) # one column per condition that is supposed to be satisfied with equality
+    condition_matrix <- inequality_mat[rows_to_alter,-ncol(inequality_mat), drop = F]
+    #if(!is.matrix(condition_matrix)){
+    #  condition_matrix <- matrix(condition_matrix, nrow = length(rows_to_alter), ncol = ncol(inequality_mat) - 1)
+    #}
+    # we use matrix multiplication to check the conditions --
+    deviations <- all_vertices %*% t(condition_matrix) - matrix(inequality_mat[rows_to_alter,ncol(inequality_mat)], nrow = nrow(all_vertices), ncol = length(rows_to_alter), byrow = T) # one column per condition that is supposed to be satisfied with equality. I think I should have used drop=F here.
     vertices_satisfying_conditions <- which(apply(abs(deviations) < epsilon, 1, all))
 
     if(length(vertices_satisfying_conditions) == 0){

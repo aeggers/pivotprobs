@@ -23,8 +23,9 @@ election_event_probs(
   minimum_volume = 0,
   force_condition_based_mc = F,
   store_time = T,
-  maxEvals = 1e+15,
+  maxEvals = .Machine$integer.max,
   tol = 0.01,
+  eval_points_for_1d_integral = 100,
   ev_increments = 50,
   en_increments_1st_round = 30,
   en_increments_2nd_round = 100,
@@ -97,6 +98,9 @@ may therefore take a very long time.}
 \item{tol}{The relative error requested in computing an
 integral via method "sc" (passed to
 \code{SimplicialCubature::adaptIntegrateSimplex()}). For faster imprecise computation (e.g. for testing), set to e.g. .2.}
+
+\item{eval_points_for_1d_integral}{Sets the \code{subdivisions} argument to \code{integrate()} when
+\code{SimplicialCubature::adaptIntegrateSimplex()} will be performed on a line.}
 
 \item{ev_increments}{Increments for numerical integration in method "ev".}
 

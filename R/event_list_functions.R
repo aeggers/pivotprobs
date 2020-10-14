@@ -87,7 +87,7 @@ plurality_election <- function(n = 1000, k = 4, max_pivot_event_degree = 1){
 
   el$events <- list()
 
-  win_P <- matrix(0, nrow = k, ncol = k)
+  win_P <- matrix(0, nrow = k, ncol = k+1)
   win_P[1, ] <- 1
 
   el[["events"]][["i_"]] <- list(
@@ -143,15 +143,15 @@ positional_election <- function(n = 1000, s = .5){
     win_conditions = rbind(c(1-s, 1, s-1, -1, s, -s, 1/n),  # i scores above j
                      c(1, 1-s, s, -s, s-1, -1, 1/n)),   # i scores above k
     tie_condition_rows = c(),
-    P = rbind(rep(1, 6), 0, 0, 0)
+    P = rbind(rep(1, 7), 0, 0, 0)
     )
 
   el[["events"]][["i_j"]] <- list(
     win_conditions = el[["events"]][["i_"]]$win_conditions,
     tie_condition_rows = c(1),                               # i barely scores above j
     scaling_factor = 2*sqrt(1 - s + s^2),
-    P = rbind(c(1,1,s,0,1,1-s),
-            c(0,0,1-s,1,0,s),
+    P = rbind(c(1,1,s,0,1,1-s,1),
+            c(0,0,1-s,1,0,s,0),
             0),
     adjacent_events = "j_i"
     )
@@ -185,7 +185,7 @@ irv_election <- function(n = 1000, s = 0){
                        c(s,-s,1,1-s,-1,s-1,1/n),    # so does j
                        c(1,1,-1,-1,1,-1, 1/n)), # i beats j in second round
     tie_condition_rows = c(),
-    P = rbind(rep(1, 6), 0, 0),
+    P = rbind(rep(1, 7), 0, 0),
     adjacent_events = "j__i"
   )
 
@@ -194,7 +194,7 @@ irv_election <- function(n = 1000, s = 0){
     win_conditions = el[["events"]][["i__j"]]$win_conditions,
     tie_condition_rows = c(3),                        # i barely beats j in second round
     scaling_factor = sqrt(6),
-    P = rbind(c(1,1,0,0,1,0), c(0,0,1,1,0,1), 0),
+    P = rbind(c(1,1,0,0,1,0,1), c(0,0,1,1,0,1,0), 0),
     adjacent_events = "j_i")
 
   # first round pivot events
@@ -206,7 +206,7 @@ irv_election <- function(n = 1000, s = 0){
                        c(1,-1,1,1,-1,-1, 1/n)),   # j beats k in second round
     tie_condition_rows = c(3),                         # i barely beats j in first round
     scaling_factor = psf,
-    P = rbind(c(1,1,s,0,1,1-s), c(0,0,1-s,1,0,s), 0),
+    P = rbind(c(1,1,s,0,1,1-s,1), c(0,0,1-s,1,0,s,0), 0),
     adjacent_events = "j_i|ji")
 
   i_j_ik_conditions <- el[["events"]][["i_j|ij"]]$win_conditions
@@ -216,7 +216,7 @@ irv_election <- function(n = 1000, s = 0){
     win_conditions = i_j_ik_conditions,
     tie_condition_rows = c(3),
     scaling_factor = psf,
-    P = rbind(c(1,1,s,0,1,1-s), 0, c(0,0,1-s,1,0,s)),
+    P = rbind(c(1,1,s,0,1,1-s,1), 0, c(0,0,1-s,1,0,s,0)),
     adjacent_events = "j_i|ki")
 
   i_j_kj_conditions <- el[["events"]][["i_j|ij"]]$win_conditions
@@ -226,7 +226,7 @@ irv_election <- function(n = 1000, s = 0){
     win_conditions = i_j_kj_conditions,
     tie_condition_rows = c(3),
     scaling_factor = psf,
-    P = rbind(0, c(0,0,1-s,1,0,s), c(1,1,s,0,1,1-s)),
+    P = rbind(0, c(0,0,1-s,1,0,s,0), c(1,1,s,0,1,1-s,1)),
     adjacent_events = "j_i|jk")
 
   el
@@ -250,7 +250,7 @@ kemeny_young_election <- function(n = 1000){
                        c(1, 1, 1, -1, -1, -1, 1/n),   # i pairwise beats k
                        c(1, -1, 1, 1, -1, -1, 1/n)),  # j pairwise beats k
     tie_condition_rows = c(),
-    P = rbind(rep(1, 6), 0, 0)
+    P = rbind(rep(1, 7), 0, 0)
   )
 
   # i is the condorcet winner by less than one vote over j
@@ -258,7 +258,7 @@ kemeny_young_election <- function(n = 1000){
     win_conditions = el[["events"]][["i__j"]]$win_conditions,
     tie_condition_rows = c(1),  # i barely beats j
     scaling_factor = sqrt(6),
-    P = rbind(c(1,1,0,0,1,0), c(0,0,1,1,0,1), 0),
+    P = rbind(c(1,1,0,0,1,0,1), c(0,0,1,1,0,1,0), 0),
     adjacent_events = "j_i"
   )
 
@@ -271,7 +271,7 @@ kemeny_young_election <- function(n = 1000){
                        c(0,-1, 1, 1,-1, 0, 1/n)   # j's loss to i better than k's loss to j
     ),
     tie_condition_rows = c(),
-    P = rbind(rep(1, 6), 0, 0)
+    P = rbind(rep(1, 7), 0, 0)
   )
 
   # i barely wins in a cycle,
@@ -281,8 +281,8 @@ kemeny_young_election <- function(n = 1000){
     tie_condition_rows = c(4), # i's loss to k barely better than j's loss to i
     scaling_factor = 2,  # sqrt(number of tallies involved)
     # a ballot that improves both i relative to k and j relative to i (jik) or makes both worse (kij) does not change the outcome. you only elect j by putting jki or kji.
-    P = rbind(c(1,1,1,0,1,0),
-              c(0,0,0,1,0,1),
+    P = rbind(c(1,1,1,0,1,0,1),
+              c(0,0,0,1,0,1,0),
               0),
     adjacent_events = "ji_ik|ijki"  # j's loss to i slightly better than i's loss to k
   )
@@ -298,8 +298,8 @@ kemeny_young_election <- function(n = 1000){
     tie_condition_rows = c(4), # j's loss to i barely better than i's loss to k
     scaling_factor = 2,  # sqrt(number of tallies involved)
     # you only elect i by putting i above k and j below i, so ikj or ijk
-    P = rbind(c(1,1,0,0,0,0),
-              c(0,0,1,1,1,1),
+    P = rbind(c(1,1,0,0,0,0,0),
+              c(0,0,1,1,1,1,1),
               0),
     adjacent_events = "ik_ji|ijki"
   )

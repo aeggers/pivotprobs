@@ -6,7 +6,6 @@
 \alias{positional_event_probs_from_sims}
 \alias{irv_event_probs_from_sims}
 \alias{condorcet_event_probs_from_sims}
-\alias{condorcet_pivot_probs_from_sims_v0}
 \title{Faster Monte Carlo estimation of pivot probabilities}
 \usage{
 plurality_event_probs_from_sims(
@@ -17,8 +16,11 @@ plurality_event_probs_from_sims(
   sep = "_",
   method = "density",
   merge = F,
+  drop = F,
   bw_divisor = 1,
-  skip_non_pivot_events = T
+  skip_non_pivot_events = T,
+  s = NULL,
+  raw = F
 )
 
 positional_event_probs_from_sims(
@@ -30,7 +32,11 @@ positional_event_probs_from_sims(
   sep = "_",
   method = "density",
   merge = F,
-  bw_divisor = 1
+  drop = F,
+  increments = 10,
+  bw_divisor = 1,
+  skip_non_pivot_events = T,
+  raw = F
 )
 
 irv_event_probs_from_sims(
@@ -54,19 +60,8 @@ condorcet_event_probs_from_sims(
   kemeny = T,
   method = "density",
   merge = F,
-  bw_divisor = 1
-)
-
-condorcet_pivot_probs_from_sims_v0(
-  sims,
-  n = 1000,
-  window = 0.01,
-  cand_names = NULL,
-  sep = "_",
-  kemeny = T,
-  method = "density",
-  merge = F,
-  bw_divisor = 1
+  bw_divisor = 1,
+  s = NULL
 )
 }
 \arguments{
