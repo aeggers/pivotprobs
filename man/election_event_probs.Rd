@@ -62,7 +62,8 @@ or logistic normal distribution.}
 provided in \code{sims}.}
 
 \item{sim_window}{Vote share discrepancy within which two candidates will be
-"nearly tied" for method "mc". Larger \code{sim_window} means more bias,
+"nearly tied" when \code{method="mc"} and \code{mc_method="rectangular"}.
+Larger \code{sim_window} means more bias,
 smaller means more variance. Set to .01 by default.}
 
 \item{cand_names}{Optional vector of candidate names. If not supplied, will
@@ -81,6 +82,10 @@ of events where one vote cannot make a difference, e.g. where candidate \code{a}
 wins by more than one vote. Relevant for methods "sc" and "mc".}
 
 \item{skip_compound_pivot_events}{Set to \code{T} to avoid computing the probability of (near) three-way ties in plurality.}
+
+\item{minimum_volume}{If greater than zero, we check the volume of \code{S}
+matrices and skip those that do not contain at least
+ \code{minimum_volume}.}
 
 \item{force_condition_based_mc}{Set to \code{T} to force Monte Carlo simulations to
 use the conditions in the election object rather than a faster bespoke method.}
@@ -121,7 +126,7 @@ lists contains
 \itemize{
 \item \code{integral} the event probability
 \item \code{P} the election probability matrix, indicating which candidate (rows)
-is elected at this event depending on which extra ballot (columns) is submitted.
+is elected at this event depending on which action (columns) the voter takes.
 \item \code{seconds_elapsed} the time to compute this event probability.
 }
 For method "sc" these event-specific lists include other output from \code{SimplicialCubature::adaptIntegrateSimplex()}, such as \code{functionEvaluations} and \code{message}.
@@ -134,7 +139,7 @@ election outcomes),
 \itemize{
 \item a scalar \code{integral} indicating the probability of the event,
 \item a matrix \code{P}  indicating which candidate elected (rows) as a
-function of which extra ballot is submitted at this event (columns), and
+function of which action the voter takes (columns), and
 \item other objects depending on the method used to compute the event probabilities.}
 }
 \details{

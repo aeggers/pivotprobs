@@ -14,10 +14,17 @@
 #' @param sims A matrix of simulated election results, with one column per
 #' ballot type. Must be 6 columns for the ordinal methods (IRV, Kemeny-Young, positional).
 #' @param n Size of electorate
-#' @param window Window within which two candidates are considered to be tied for the purpose of
-#' simulation. This is normalized away. Wider window means lower variance but more bias.
+#' @param window Window within which two candidates are considered to be tied
+#' when \code{method="rectangular"}. Wider window means lower variance but
+#' more bias.
+#' @param s Score allocated to a second-place ranking in positional
+#' and IRV elections.
 #' @param cand_names Names of the candidates.
 #' @param sep Separation between candidate names.
+#' @param merge Merge adjacent pivot events?
+#' @param drop Drop a dimension?
+#' @param skip_non_pivot_events Skip non pivot events?
+#' @param raw Return counts rather than integrals/proportions?
 #' @param kemeny For Condorcet method, compute Kemeny-Young pivot event probabilities? If \code{F}, only handles event in which the Condorcet winner
 #' is decided.
 #'
@@ -132,7 +139,6 @@ plurality_event_probs_from_sims <- function(sims = NULL, n = 1000, window = .01,
   }
 
   if(!skip_non_pivot_events){
-    # row_maxes <- apply(sims, 1, max)
     empty_P <- matrix(0, nrow = length(cand_names), ncol = length(cand_names) + 1)
     for(i in 1:ncol(sims)){
       this_P <- empty_P
@@ -288,7 +294,7 @@ positional_event_probs_from_sims <- function(sims, window = .01, n = 1000, s = .
 
   if(!skip_non_pivot_events){
     score_sims <- cbind(score_a, score_b, score_c)
-    empty_P <- matrix(0, nrow = 3, ncol = 6)
+    empty_P <- matrix(0, nrow = 3, ncol = 7)
     for(i in 1:3){
       this_P <- empty_P
       this_P[i,] <- 1
@@ -302,10 +308,10 @@ positional_event_probs_from_sims <- function(sims, window = .01, n = 1000, s = .
 
 }
 
-### TODO: add non pivot events, add drop method
+### TODO: add drop method
 #' @rdname standalone_monte_carlo_methods
 #' @export
-irv_event_probs_from_sims <- function(sims, window = .01, n = 1000, s = 0, cand_names = NULL, sep = "_", method = "density", merge = F, bw_divisor = 1){
+irv_event_probs_from_sims <- function(sims, window = .01, n = 1000, s = 0, cand_names = NULL, sep = "_", method = "density", merge = F, bw_divisor = 1, skip_non_pivot_events = T){
 
   if(ncol(sims) != 6){
     stop("sims must have 6 columns.")
@@ -327,20 +333,15 @@ irv_event_probs_from_sims <- function(sims, window = .01, n = 1000, s = 0, cand_
   score_c <- sims[,5] + sims[,6] + s*(sims[,2] + sims[,4])
 
   # pairwise margins
-  a_vs_b <- 2*(sims[,1] + sims[,2] + sims[,5]) - .5
-  a_vs_c <- 2*(sims[,1] + sims[,2] + sims[,3]) - .5
-  b_vs_c <- 2*(sims[,3] + sims[,4] + sims[,1]) - .5
-
-  # former version
-  #a_vs_b <- 2*(apply(sims[,c(1,2,5)], 1, sum) - .5) # a and b
-  #a_vs_c <- 2*(apply(sims[,c(1,2,3)], 1, sum) - .5) # a and c
-  #b_vs_c <- 2*(apply(sims[,c(1,3,4)], 1, sum) - .5) # b and c
+  a_vs_b <- 2*(sims[,1] + sims[,2] + sims[,5] - .5)
+  a_vs_c <- 2*(sims[,1] + sims[,2] + sims[,3] - .5)
+  b_vs_c <- 2*(sims[,3] + sims[,4] + sims[,1] - .5)
 
   out <- list()
 
   # second round pivot events
   # a_b and b_a
-  ab_P <- rbind(c(1,1,0,0,1,0), c(0,0,1,1,0,1),0)
+  ab_P <- rbind(c(1,1,0,0,1,0,1), c(0,0,1,1,0,1,0),0)
   ab_pp <- irv_second_round_pivot_prob_ab(score_a, score_b, score_c, a_vs_b, s, method = method, n = n, merge = merge, window = window, bw_divisor = bw_divisor)
   out[[paste0(cand_names[1], sep, cand_names[2])]] <- list(
     integral = ab_pp[1],
@@ -352,7 +353,7 @@ irv_event_probs_from_sims <- function(sims, window = .01, n = 1000, s = 0, cand_
   )
 
   # a_c and c_a
-  ac_P <- rbind(c(1,1,1,0,0,0), 0, c(0,0,0,1,1,1))
+  ac_P <- rbind(c(1,1,1,0,0,0,1), 0, c(0,0,0,1,1,1,0))
   ac_pp <- irv_second_round_pivot_prob_ab(score_a, score_c, score_b, a_vs_c, s, method = method, n = n, merge = merge, window = window, bw_divisor = bw_divisor)
   out[[paste0(cand_names[1], sep, cand_names[3])]] <- list(
     integral = ac_pp[1],
@@ -364,7 +365,7 @@ irv_event_probs_from_sims <- function(sims, window = .01, n = 1000, s = 0, cand_
   )
 
   # b_c and c_b
-  bc_P <- rbind(0, c(1,0,1,1,0,0), c(0,1,0,0,1,1))
+  bc_P <- rbind(0, c(1,0,1,1,0,0,1), c(0,1,0,0,1,1,0))
   bc_pp <- irv_second_round_pivot_prob_ab(score_b, score_c, score_a, b_vs_c, s, method = method, n = n, merge = merge, window = window, bw_divisor = bw_divisor)
   out[[paste0(cand_names[2], sep, cand_names[3])]] <- list(
     integral = bc_pp[1],
@@ -379,8 +380,8 @@ irv_event_probs_from_sims <- function(sims, window = .01, n = 1000, s = 0, cand_
 
   # a and b
   ab_pps <- irv_first_round_pivot_probs_ab(score_a, score_b, score_c, a_vs_c, b_vs_c, s, method = method, n = n, merge = merge, window = window, bw_divisor = bw_divisor)
-  ab_P <- rbind(c(1,1,0,0,1,1), c(0,0,1,1,0,0), 0)
-  ba_P <- rbind(c(1,1,0,0,0,0), c(0,0,1,1,1,1), 0)
+  ab_P <- rbind(c(1,1,0,0,1,1,1), c(0,0,1,1,0,0,0), 0)
+  ba_P <- rbind(c(1,1,0,0,0,0,0), c(0,0,1,1,1,1,1), 0)
 
   # a_b|ab
   out[[paste0(cand_names[1], sep, cand_names[2], "|",  cand_names[1], cand_names[2])]] <- list(
@@ -418,8 +419,8 @@ irv_event_probs_from_sims <- function(sims, window = .01, n = 1000, s = 0, cand_
 
   # a and c
   ac_pps <- irv_first_round_pivot_probs_ab(score_a, score_c, score_b, a_vs_b, -b_vs_c, s, method = method, n = n, merge = merge, window = window, bw_divisor = bw_divisor)
-  ac_P <- rbind(c(1,1,1,1,0,0), 0, c(0,0,0,0,1,1))
-  ca_P <- rbind(c(1,1,0,0,0,0), 0, c(0,0,1,1,1,1))
+  ac_P <- rbind(c(1,1,1,1,0,0,1), 0, c(0,0,0,0,1,1,0))
+  ca_P <- rbind(c(1,1,0,0,0,0,0), 0, c(0,0,1,1,1,1,1))
 
   # a_c|ac
   out[[paste0(cand_names[1], sep, cand_names[3], "|",  cand_names[1], cand_names[3])]] <- list(
@@ -457,8 +458,8 @@ irv_event_probs_from_sims <- function(sims, window = .01, n = 1000, s = 0, cand_
 
   # b and c
   bc_pps <- irv_first_round_pivot_probs_ab(score_b, score_c, score_a, -a_vs_b, -a_vs_c, s, method = method, n = n, merge = merge, window = window, bw_divisor = bw_divisor)
-  bc_P <- rbind(0, c(1,1,1,1,0,0), c(0,0,0,0,1,1))
-  cb_P <- rbind(0, c(0,0,1,1,0,0), c(1,1,0,0,1,1))
+  bc_P <- rbind(0, c(1,1,1,1,0,0,1), c(0,0,0,0,1,1,0))
+  cb_P <- rbind(0, c(0,0,1,1,0,0,0), c(1,1,0,0,1,1,1))
 
   # b_c|bc
   out[[paste0(cand_names[2], sep, cand_names[3], "|",  cand_names[2], cand_names[3])]] <- list(
@@ -492,6 +493,39 @@ irv_event_probs_from_sims <- function(sims, window = .01, n = 1000, s = 0, cand_
     integral = bc_pps[["i_j|kj"]][2],
     P = cb_P[c(2,1,3),]
   )
+
+  if(!skip_non_pivot_events){
+    out[[paste0(cand_names[1],"__", cand_names[2])]] <- list(
+      integral = mean(score_a - score_c > 1/n & score_b - score_c > 1/n & a_vs_b > 1/n),
+      P = rbind(rep(1, 7), 0, 0)
+    )
+
+    out[[paste0(cand_names[2],"__", cand_names[1])]] <- list(
+      integral = mean(score_a - score_c > 1/n & score_b - score_c > 1/n & a_vs_b < -1/n),
+      P = rbind(0, rep(1, 7), 0)
+    )
+
+    out[[paste0(cand_names[1],"__", cand_names[3])]] <- list(
+      integral = mean(score_a - score_b > 1/n & score_c - score_b > 1/n & a_vs_c > 1/n),
+      P = rbind(rep(1, 7), 0, 0)
+    )
+
+    out[[paste0(cand_names[3],"__", cand_names[1])]] <- list(
+      integral = mean(score_a - score_b > 1/n & score_c - score_b > 1/n & a_vs_c < -1/n),
+      P = rbind(0, 0, rep(1, 7))
+    )
+
+    out[[paste0(cand_names[2],"__", cand_names[3])]] <- list(
+      integral = mean(score_b - score_a > 1/n & score_c - score_a > 1/n & b_vs_c > 1/n),
+      P = rbind(0, rep(1, 7), 0)
+    )
+
+    out[[paste0(cand_names[3],"__", cand_names[2])]] <- list(
+      integral = mean(score_b - score_a > 1/n & score_c - score_a > 1/n & b_vs_c < -1/n),
+      P = rbind(0, 0, rep(1, 7))
+    )
+
+  }
 
   out
 }
@@ -562,10 +596,10 @@ irv_first_round_pivot_probs_ab <- function(score_a, score_b, score_c, a_vs_c, b_
   out
 }
 
-# TODO: add non-pivot events
+# TODO: add drop method
 #' @rdname standalone_monte_carlo_methods
 #' @export
-condorcet_event_probs_from_sims <- function(sims, n = 1000, window = .01, cand_names = NULL, sep = "_", kemeny = T, method = "density", merge = F, bw_divisor = 1, s = NULL){
+condorcet_event_probs_from_sims <- function(sims, n = 1000, window = .01, cand_names = NULL, sep = "_", kemeny = T, method = "density", merge = F, bw_divisor = 1, s = NULL, skip_non_pivot_events = T){
 
   if(is.null(cand_names)){
     if(kemeny & !is.null(cand_names) & (cand_names %>% sort() %>% paste(collapse = "") != "abc")){
@@ -589,6 +623,7 @@ condorcet_event_probs_from_sims <- function(sims, n = 1000, window = .01, cand_n
   c_vs_a <- sims[,5] + sims[,6] + sims[,4]
   c_vs_b <- sims[,5] + sims[,6] + sims[,2]
 
+
   out <- list()
 
   # Condorcet winner event a_b
@@ -597,7 +632,6 @@ condorcet_event_probs_from_sims <- function(sims, n = 1000, window = .01, cand_n
   cond_1 <- a_vs_c - c_vs_a > 1/n + delta_adjust/2
   cond_2 <- b_vs_c - c_vs_b > 1/n - delta_adjust/2
   pps <- pivot_prob_from_delta_and_condition2(delta, cond_1 & cond_2, method = method, bw_divisor = bw_divisor, window = window, n = n, drop = T, merge = merge)
-  # pps <- pivot_prob_from_delta_and_condition(delta, cond_1 & cond_2, method = method, bw_divisor = bw_divisor, window = window, eval.points = limits, n = n)
   a_b_P <- rbind(c(1,1,0,0,1,0), c(0,0,1,1,0,1),0)
   out[[paste0(cand_names[1], sep, cand_names[2])]] <- list(
     integral = pps[1],
@@ -614,7 +648,6 @@ condorcet_event_probs_from_sims <- function(sims, n = 1000, window = .01, cand_n
   cond_1 <- a_vs_b - b_vs_a > 1/n + delta_adjust/2
   cond_2 <- c_vs_b - b_vs_c > 1/n - delta_adjust/2
   pps <- pivot_prob_from_delta_and_condition2(delta, cond_1 & cond_2, method = method, bw_divisor = bw_divisor, window = window, n = n, drop = T, merge = merge)
-#   pps <- pivot_prob_from_delta_and_condition(delta, cond_1 & cond_2, method = method, bw_divisor = bw_divisor, window = window, eval.points = limits, n = n)
   a_c_P <- rbind(c(1,1,1,0,0,0), 0, c(0,0,0,1,1,1))
   out[[paste0(cand_names[1], sep, cand_names[3])]] <- list(
     integral = pps[1],
@@ -631,7 +664,6 @@ condorcet_event_probs_from_sims <- function(sims, n = 1000, window = .01, cand_n
   cond_1 <- b_vs_a - a_vs_b > 1/n + delta_adjust/2
   cond_2 <- c_vs_a - a_vs_c > 1/n - delta_adjust/2
   pps <- pivot_prob_from_delta_and_condition2(delta, cond_1 & cond_2, method = method, bw_divisor = bw_divisor, window = window, n = n, drop = T, merge = merge)
-  # pps <- pivot_prob_from_delta_and_condition(delta, cond_1 & cond_2, method = method, bw_divisor = bw_divisor, window = window, eval.points = limits, n = n)
   b_c_P <- rbind(0, c(1,0,1,1,0,0), c(0,1,0,0,1,1))
   out[[paste0(cand_names[2], sep, cand_names[3])]] <- list(
     integral = pps[1],
@@ -740,6 +772,47 @@ condorcet_event_probs_from_sims <- function(sims, n = 1000, window = .01, cand_n
       P = cbind(c(0,1,0), c(0,0,1), c(0,1,0), c(0,0,1), c(0,0,1), c(0,0,1), c(0,0,1))
     )
   }
+
+  if(!skip_non_pivot_events){
+
+    # a is condorcet winner
+    out[[paste0(cand_names[[1]], "_")]] <- list(
+      integral = mean(a_vs_b - b_vs_a > 1/n & a_vs_c - c_vs_a > 1/n),
+      P = rbind(rep(1, 7), 0, 0)
+    )
+
+    # b is condorcet winner
+    out[[paste0(cand_names[[2]], "_")]] <- list(
+      integral = mean(b_vs_a - a_vs_b > 1/n & b_vs_c - c_vs_b > 1/n),
+      P = rbind(0, rep(1, 7), 0)
+    )
+
+    # c is condorcet winner
+    out[[paste0(cand_names[[3]], "_")]] <- list(
+      integral = mean(c_vs_a - a_vs_c > 1/n & c_vs_b - b_vs_c > 1/n),
+      P = rbind(0, 0, rep(1, 7))
+    )
+
+    forward_cycle <- a_vs_b - b_vs_a > 1/n & b_vs_c - c_vs_b > 1/n & c_vs_a - a_vs_c > 1/n
+    reverse_cycle <- b_vs_a - a_vs_b > 1/n & c_vs_b - b_vs_c > 1/n & a_vs_c - c_vs_a > 1/n
+    # a wins in cycle
+    out[[paste0(cand_names[[1]], "_CYCLE")]] <- list(
+      integral = mean((forward_cycle & a_vs_c > b_vs_a & a_vs_c > c_vs_b) | (reverse_cycle & a_vs_b > b_vs_c & a_vs_b > c_vs_a)),
+      P = rbind(rep(1, 7), 0, 0)
+    )
+    # b wins in cycle
+    out[[paste0(cand_names[[2]], "_CYCLE")]] <- list(
+      integral = mean((forward_cycle & b_vs_a > c_vs_b & b_vs_a > a_vs_c) | (reverse_cycle & b_vs_c > a_vs_b & b_vs_c > c_vs_a)),
+      P = rbind(0, rep(1, 7), 0)
+    )
+    # c wins in cycle
+    out[[paste0(cand_names[[3]], "_CYCLE")]] <- list(
+      integral = mean((forward_cycle & b_vs_a > a_vs_c & b_vs_a > c_vs_b) | (reverse_cycle & c_vs_a > a_vs_b & c_vs_a > b_vs_c)),
+      P = rbind(0, 0, rep(1, 7))
+    )
+
+  }
+
 
   out
 

@@ -48,7 +48,8 @@ irv_event_probs_from_sims(
   sep = "_",
   method = "density",
   merge = F,
-  bw_divisor = 1
+  bw_divisor = 1,
+  skip_non_pivot_events = T
 )
 
 condorcet_event_probs_from_sims(
@@ -61,7 +62,8 @@ condorcet_event_probs_from_sims(
   method = "density",
   merge = F,
   bw_divisor = 1,
-  s = NULL
+  s = NULL,
+  skip_non_pivot_events = T
 )
 }
 \arguments{
@@ -70,12 +72,24 @@ ballot type. Must be 6 columns for the ordinal methods (IRV, Kemeny-Young, posit
 
 \item{n}{Size of electorate}
 
-\item{window}{Window within which two candidates are considered to be tied for the purpose of
-simulation. This is normalized away. Wider window means lower variance but more bias.}
+\item{window}{Window within which two candidates are considered to be tied
+when \code{method="rectangular"}. Wider window means lower variance but
+more bias.}
 
 \item{cand_names}{Names of the candidates.}
 
 \item{sep}{Separation between candidate names.}
+
+\item{merge}{Merge adjacent pivot events?}
+
+\item{drop}{Drop a dimension?}
+
+\item{skip_non_pivot_events}{Skip non pivot events?}
+
+\item{s}{Score allocated to a second-place ranking in positional
+and IRV elections.}
+
+\item{raw}{Return counts rather than integrals/proportions?}
 
 \item{kemeny}{For Condorcet method, compute Kemeny-Young pivot event probabilities? If \code{F}, only handles event in which the Condorcet winner
 is decided.}

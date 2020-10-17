@@ -56,7 +56,8 @@
 #' @param num_sims  Optional number of simulated elections, if not
 #' provided in \code{sims}.
 #' @param sim_window Vote share discrepancy within which two candidates will be
-#' "nearly tied" for method "mc". Larger \code{sim_window} means more bias,
+#' "nearly tied" when \code{method="mc"} and \code{mc_method="rectangular"}.
+#' Larger \code{sim_window} means more bias,
 #' smaller means more variance. Set to .01 by default.
 #' @param cand_names Optional vector of candidate names. If not supplied, will
 #' be "a", "b", "c", etc.
@@ -72,6 +73,9 @@
 #' @param skip_compound_pivot_events Set to \code{T} to avoid computing the probability of (near) three-way ties in plurality.
 #' @param force_condition_based_mc Set to \code{T} to force Monte Carlo simulations to
 #' use the conditions in the election object rather than a faster bespoke method.
+#' @param minimum_volume If greater than zero, we check the volume of \code{S}
+#' matrices and skip those that do not contain at least
+#'  \code{minimum_volume}.
 #' @param store_time By default we store the time each computation takes, in seconds.
 #' @param maxEvals The maximum number of function evaluations to compute an
 #' integral via method "sc" (passed to
@@ -231,11 +235,11 @@ election_event_probs <- function(election,
       if(election$system == "plurality"){
         return(plurality_event_probs_from_sims(sims = sims, n = n, window = sim_window, cand_names = cand_names, method = mc_method, drop = drop_dimension, merge = merge_adjacent_pivot_events, bw_divisor = bw_divisor, skip_non_pivot_events = skip_non_pivot_events))
       }else if(election$system == "positional"){
-        return(positional_event_probs_from_sims(sims = sims, n = n, window = sim_window, cand_names = cand_names, method = mc_method, merge = merge_adjacent_pivot_events, s = election$s, bw_divisor = bw_divisor))
+        return(positional_event_probs_from_sims(sims = sims, n = n, window = sim_window, cand_names = cand_names, method = mc_method, merge = merge_adjacent_pivot_events, s = election$s, bw_divisor = bw_divisor, skip_non_pivot_events = skip_non_pivot_events))
       }else if(election$system == "irv"){
-        return(irv_event_probs_from_sims(sims = sims, n = n, window = sim_window, cand_names = cand_names, method = mc_method, merge = merge_adjacent_pivot_events, s = election$s, bw_divisor = bw_divisor))
+        return(irv_event_probs_from_sims(sims = sims, n = n, window = sim_window, cand_names = cand_names, method = mc_method, merge = merge_adjacent_pivot_events, s = election$s, bw_divisor = bw_divisor, skip_non_pivot_events = skip_non_pivot_events))
       }else if(election$system == "kemeny_young"){
-        return(condorcet_event_probs_from_sims(sims = sims, n = n, window = sim_window, cand_names = cand_names, kemeny = T, method = mc_method, merge = merge_adjacent_pivot_events, bw_divisor = bw_divisor))
+        return(condorcet_event_probs_from_sims(sims = sims, n = n, window = sim_window, cand_names = cand_names, kemeny = T, method = mc_method, merge = merge_adjacent_pivot_events, bw_divisor = bw_divisor, skip_non_pivot_events = skip_non_pivot_events))
       }else{
         # if we are using the election conditions -- legacy method, basically
         merge_adjacent_pivot_events <- T
