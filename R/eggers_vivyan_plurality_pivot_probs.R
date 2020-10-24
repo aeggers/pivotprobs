@@ -48,6 +48,11 @@
 #' @export
 eggers_vivyan_probability_of_tie_for_first <- function(alpha, increments = 50){
 
+  if(length(alpha) == 3){
+    # do the analytical version that doesn't suffer bias when one alpha component is very small
+    return(list(estimate = pr_tie_for_first_1_and_2_definite_integral(alpha)))
+  }
+
   boundary_points <- seq(from = 1/length(alpha), to = .5, length = increments+1) # the least a pair of parties can get and be tied for first is 1/k each. the most they can get is .5.
 
   midpoints <- apply(cbind(boundary_points[1:increments], boundary_points[2:(increments+1)]), 1, mean) # the midpoints of those grid segments
@@ -80,3 +85,14 @@ probability_of_tie_for_first_at_y_naive <- function(alpha, y){
   }
   list(prob.of.tie.at.y = prob.of.tie.at.y, probs.of.being.below.y = probs, probability = prod(c(prob.of.tie.at.y, probs)))
 }
+
+incomplete_beta <- function(x,a,b){
+  pbeta(x,a,b)*beta(a,b)
+}
+
+pr_tie_for_first_1_and_2_definite_integral <- function(alpha){
+  D.term <- gamma(sum(alpha))/exp(sum(lgamma(alpha)))*sqrt(2) # sqrt 2 adjustment is to make it fit other estimates -- have not justified it mathematically.
+  denom <- 2^(sum(alpha[1:2]) - 1) # only thing unclear is exactly why this is -1 and not -2: I think in the change of variables from 2z to t I need to put another 2 in the denominator, but have not completely worked it out.
+  as.numeric((D.term/denom)*incomplete_beta(1/3, alpha[3], sum(alpha[1:2]) - 1))
+}
+
