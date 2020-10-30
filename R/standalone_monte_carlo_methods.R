@@ -614,8 +614,7 @@ condorcet_event_probs_from_sims <- function(sims, n = 1000, window = .01, cand_n
     stop("sims must have 6 columns.")
   }
 
-  if(method == "density"){method <- "naive_density"; bw_divisor = 1} # formerly undersmoothing this (bw_divisor = 2). trying without  # implementation of density is not yet correct, but naive_density wor
-  pretty well.
+  if(method == "density"){method <- "naive_density"; bw_divisor = 1} # formerly undersmoothing this (bw_divisor = 2). trying without  # implementation of density is not yet correct, but naive_density works pretty well.
 
   # pairwise tallies: what each gets against each other
   # note this is different from meaning above
