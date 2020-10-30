@@ -68,6 +68,8 @@ brute_force_mc_eep <- function(num_sims = 10000000, batch_size = 500000, alpha =
 
 density_estimate <- function(x, bw_divisor = 1, eval.points = c(0)){
   if(length(x) <= 1){return(rep(0, length(eval.points)))} # can't get a bandwidth with only 1 point
+  # uses KS package without calling it
+  # throws error when KS not installed
   bw <- ks::hpi(x, binned = T)/bw_divisor
   ks::kde(x = x, h = bw, eval.points = eval.points)$estimate
 }
@@ -612,7 +614,8 @@ condorcet_event_probs_from_sims <- function(sims, n = 1000, window = .01, cand_n
     stop("sims must have 6 columns.")
   }
 
-  if(method == "density"){method <- "naive_density"; bw_divisor = 1} # formerly undersmoothing this (bw_divisor = 2). trying without  # implementation of density is not yet correct, but naive_density works pretty well.
+  if(method == "density"){method <- "naive_density"; bw_divisor = 1} # formerly undersmoothing this (bw_divisor = 2). trying without  # implementation of density is not yet correct, but naive_density wor
+  pretty well.
 
   # pairwise tallies: what each gets against each other
   # note this is different from meaning above
