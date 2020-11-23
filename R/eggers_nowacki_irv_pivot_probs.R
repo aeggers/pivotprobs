@@ -17,7 +17,7 @@ eggers_nowacki_second_round_pivot_probability <- function(alpha, increments = 20
   stopifnot(length(beta.parts) == length(dir.parts))
   width_of_channel <- sqrt(6)/4  # (times N)
   distance_between_midpoints <- sqrt(2)*(midpoints.y[2] - midpoints.y[1])
-  width_of_channel*distance_between_midpoints*sum(dir.parts*beta.parts) # see appendix of AJPS (?) paper for explanation of width_of_channel term. basically, the width is the distance between the points (1/4, 1/4, 1/2) and (1/4 -1/4N, 1/4 - 1/4N, 1/2 + 1/2N).
+  width_of_channel*distance_between_midpoints*sum(dir.parts*beta.parts) # see appendix of EN paper for explanation of width_of_channel term. basically, the width is the distance between the points (1/4, 1/4, 1/2) and (1/4 -1/4N, 1/4 - 1/4N, 1/2 + 1/2N).
   # the distance_between_midpoints term is just a numerical integration point -- distance between (y, 1/2 - y, 1/2) and (y + d, 1/2 - y - d, 1/2) is sqrt(2)*d.
 }
 
@@ -52,6 +52,8 @@ get.increment.midpoints = function(start, end, increments, increments.at.end = N
 	}
 	out
 }
+
+
 
 
 

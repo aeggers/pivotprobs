@@ -126,6 +126,46 @@ plurality_election <- function(n = 1000, k = 4, max_pivot_event_degree = 1){
 
 #' @rdname election_list_functions
 #' @export
+pr_election <- function(n = 1000, M = 3){
+  # this one works differently
+  if(M < 1){stop("M must be an integer 1 or greater")}
+  el <- list()
+  el$n <- n
+  el$M <- M
+  el$ordinal <- F
+  el$system <- "dhondt"
+
+  el$events <- list()
+
+  dgp <- dhondt_gridpoints(M = M)
+
+  event_names <- dgp %>% pull(event) %>% unique()
+
+  adjacent_event_names <- event_names %>% str_split("_") %>% lapply(function(x){paste0(x[2], "_", x[1])}) %>% unlist()
+
+  for(i in 1:length(event_names)){
+    event_name <- event_names[i]
+    endpoints <- dgp %>% filter(event == event_name) %>% select(a, b, c)
+
+    el$events[[event_name]] = list(
+      endpoints = endpoints,
+      P = P_matrix_from_PR_event_name_and_M(event_name, M),
+      adjacent_events = adjacent_event_names[i]
+    )
+    el$events[[adjacent_event_names[i]]] = list(
+      endpoints = endpoints,
+      P = P_matrix_from_PR_event_name_and_M(event_name, M, reverse = F),
+      adjacent_events = event_name
+    )
+
+  }
+
+  el
+
+}
+
+#' @rdname election_list_functions
+#' @export
 positional_election <- function(n = 1000, s = .5){
 
   if(s > 1 | s < 0){stop("s must be between 0 and 1.")}

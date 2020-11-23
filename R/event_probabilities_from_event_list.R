@@ -165,7 +165,7 @@ election_event_probs <- function(election,
     stop("I don't recognize the supplied method.")
   }
 
-  ## get the meta parametesr from the election object
+  ## get the meta parameters from the election object
   if(class(election) != "list"){stop("Expection `election` (first argument) to be a list.")}
   # ballot type
   ordinal <- election$ordinal
@@ -284,6 +284,26 @@ election_event_probs <- function(election,
       stop("The length of the parameter vector you provided (mu or alpha) doesn't match the length of cand_names.")
     }
   }
+
+  # this is a later, self-contained insertion: PR methods.
+  if(election$system == "dhondt"){
+    for(event_name in names(election$events)){
+      if(is.null(election$events[[event_name]]$integral)){
+        # calculate the integral using Simplicial Cubature -- nothing adaptive here, and not even storing the extra stuff.
+        endpoints <- election$events[[event_name]]$endpoints
+        if(distribution == "dirichlet"){
+          integral <- SimplicialCubature::adaptIntegrateSimplex(dirichlet_for_integration, S = t(endpoints), alpha = alpha)$integral
+        }else if(distribution == "lognormal"){
+          integral <- SimplicialCubature::adaptIntegrateSimplex(lognormal_for_integration, S = t(endpoints), mu = mu, sigma = sigma)$integral
+        }
+        election$events[[event_name]]$integral <- integral/election$n
+        adjacent_event_name <- election$events[[event_name]]$adjacent_events
+        election$events[[adjacent_event_name]]$integral <- integral/election$n
+      }
+    }
+    return(election$events)
+  }
+
 
   # get the possible permutations of the candidates
   candidate_permutation_mat <- gtools::permutations(length(cand_names), length(cand_names), cand_names)
