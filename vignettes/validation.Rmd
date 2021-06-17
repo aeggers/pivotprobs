@@ -1,5 +1,5 @@
 ---
-title: "Validating results"
+title: "Validation"
 output: rmarkdown::html_vignette
 vignette: >
   %\VignetteIndexEntry{validation}
