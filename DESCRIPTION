@@ -25,5 +25,6 @@ Imports:
     dplyr,
     tidyr,
     stringr,
-    purrr
+    purrr,
+    ks
 VignetteBuilder: knitr
