@@ -22,7 +22,7 @@ irv_election(n = 1000, s = 0) %>%
   election_event_probs(method = "mc", alpha = c(11,4, 3,4,5,2)) %>%
   combine_P_matrices() -> P3_2
 
-colnames(P3_2) <- c(ballots_ABD, "nul", WTF)
+colnames(P3_2) <- c(ballots_ABD, "nul")
 
 P4 <- matrix(0, nrow = 3, ncol = length(ballots4))
 colnames(P4) <- ballots4
