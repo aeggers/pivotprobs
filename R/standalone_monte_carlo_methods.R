@@ -68,8 +68,6 @@ brute_force_mc_eep <- function(num_sims = 10000000, batch_size = 500000, alpha =
 
 density_estimate <- function(x, bw_divisor = 1, eval.points = c(0)){
   if(length(x) <= 1){return(rep(0, length(eval.points)))} # can't get a bandwidth with only 1 point
-  # uses KS package without calling it
-  # throws error when KS not installed
   bw <- ks::hpi(x, binned = T)/bw_divisor
   ks::kde(x = x, h = bw, eval.points = eval.points)$estimate
 }
