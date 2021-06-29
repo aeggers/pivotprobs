@@ -11,3 +11,4 @@ vignettes/*.pdf
 *_files/
 notes/*.html
 inst/doc
+Rprof.out
