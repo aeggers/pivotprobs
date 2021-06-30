@@ -14,11 +14,13 @@ devtools::load_all()
 
 These are informal tests: make a plot; take a look. 
 
+These should be slight differences with finite simulated elections because the original method restricts to cases where e.g. a subsequent event *would* happen if the candidates were tied in the first round. (The new method uses what we call *naive density* in the old code.)
 
 ## Consistency between methods for computing pivot probabilities for initial round 
 
+
 ```{r make-sims}
-sims <- make_irv_sims(k = 3, n = 250000)
+sims <- simulate_ordinal_results_from_dirichlet(k = 3, n = 250000)
 ```
 
 ```{r use-old-way}
@@ -88,7 +90,7 @@ With 4 candidates, one of whom always loses, we should get the same answer via
 
 random_alpha <- sample(5:9, size = factorial(4), replace = T)
 random_alpha[c(18:24)] <- 1
-sims <- make_irv_sims(k = 4, n = 100000, alpha = random_alpha)
+sims <- simulate_ordinal_results_from_dirichlet(k = 4, n = 100000, alpha = random_alpha)
 
 # confirm that D always loses 
 sims %>% 
