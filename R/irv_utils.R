@@ -80,7 +80,7 @@ get_winner_for_each_elimination <- function(sims){
 
   tibble(dropped_cand = cands, sims = list(sims)) %>%
     mutate(sims = map2(sims, dropped_cand, drop_candidate_and_condense)) %>%
-    mutate(winners = map(sims, get_irv_winners_fast)) %>%
+    mutate(winners = map(sims, irv_winners)) %>%
     select(-sims) %>%
     unnest(cols = c(winners)) %>%
     pivot_wider(names_from = dropped_cand, values_from = winner)
