@@ -11,7 +11,6 @@ condense_mat <- function(mat){
   new_mat
 }
 
-
 drop_candidate_and_condense_matrix <- function(sims, cand_to_drop = "A"){
   # drop
   colnames(sims) <- str_replace(colnames(sims), cand_to_drop, "")
@@ -111,8 +110,10 @@ get_irv_winners_fast <- function(sims){
     select(id, winner)
 }
 
-make_irv_sims <- function(k = 4, n = 10000, alpha = NULL){
+simulate_ordinal_results_from_dirichlet <- function(k = 4, n = 10000, alpha = NULL){
+  stopifnot(k >= 3)
   if(is.null(alpha)){alpha <- sample(1:12, size = factorial(k), replace = T)}
+  stopifnot(length(alpha) == factorial(k))
   sims <- gtools::rdirichlet(n, alpha = alpha)
   colnames(sims) <- gtools::permutations(n = k, r = k, v = LETTERS[1:k]) %>%
     apply(1, paste, collapse = "")
@@ -125,11 +126,11 @@ make_irv_sims <- function(k = 4, n = 10000, alpha = NULL){
 # sims <- make_irv_sims(k = 4, n = 100000)
 # system.time(winners <- get_irv_winners_fast(sims))
 
-sims <- make_irv_sims(k = 4, n = 100000)
-system.time(winners <- get_irv_winners_fast(sims))
-
-sims <- make_irv_sims(k = 3, n = 100000)
-system.time(winners <- get_irv_winners_fast(sims))
+# sims <- make_irv_sims(k = 4, n = 100000)
+# system.time(winners <- get_irv_winners_fast(sims))
+#
+# sims <- make_irv_sims(k = 3, n = 100000)
+# system.time(winners <- get_irv_winners_fast(sims))
 
 # so now the idea must be to
 # do we have to carry around an id so that we know which race ends which way?
@@ -168,8 +169,10 @@ round_0_irv_pivot_prob <- function(sims, n = 1000, event = "AB_CD", wfee = NULL,
   # assign candidate names to variables
   parse_event_name(event)
   # get first rank shares and first rank ranks
-  frs <- get_first_rank_shares(sims %>% select(-id) %>% as.matrix())
-  ranks <- rank_mat(frs)
+  frs <- PP_LIBRARY[["frs"]]
+  if(is.null(frs)){frs <- get_first_rank_shares(sims %>% select(-id) %>% as.matrix()); PP_LIBRARY[["frs"]] <<- frs}
+  ranks <- PP_LIBRARY[["ranks"]]
+  if(is.null(ranks)){ranks <- rank_mat(frs); PP_LIBRARY[["ranks"]] <<- ranks}
   # condition 1: w and x in last two places
   cond1 <- ranks[,x] + ranks[,w] == 2*ncol(frs) - 1
   if(noisy){cat("cond1 passed by ", sum(cond1, na.rm = T), " cases.\n")}
@@ -183,7 +186,6 @@ round_0_irv_pivot_prob <- function(sims, n = 1000, event = "AB_CD", wfee = NULL,
   if(noisy){cat("cond3 passed by ", sum(cond3, na.rm = T), " cases.\n")}
   cond <- cond1 & cond2 & cond3
   if(sum(cond, na.rm = T) == 0){return(0)}
-  cat(".")
   # now compute density
   w_vs_x <- frs[,w] - frs[,x]
   the_density <- try(density_estimate(x = w_vs_x[cond], eval.points = c(0)), silent = T)
@@ -198,14 +200,16 @@ round_0_irv_pivot_prob <- function(sims, n = 1000, event = "AB_CD", wfee = NULL,
 make_P_from_event_name <- function(event, cands = c("A", "B", "C", "D")){
   parse_event_name(event)
   P <- make_empty_P(cands)
+  ballots <- colnames(P)
   z_wins <- str_detect(ballots, str_c("^", x))
   P[y, !z_wins] <- 1
   P[z, z_wins] <- 1
   P
 }
 
-round_0_pivot_probs <- function(sims, n = 1000){
+round_0_pivot_probs <- function(sims, n = 1000, reporting = 1){
   out <- list()
+  PP_LIBRARY <<- list() # clearing out by default
   wfee <- get_winner_for_each_elimination(sims)
   cands <- names(sims)[2] %>% str_split("") %>% .[[1]]
   for(w in cands){
@@ -216,13 +220,13 @@ round_0_pivot_probs <- function(sims, n = 1000){
         for(z in cands){
           if(y == z | w == z){next}
           event <- str_c(w, x, "_", y, z)
-          cat(event)
+          if(reporting >= 2){cat(event)}
           pp <- sims %>% round_0_irv_pivot_prob(n = n, event = event, wfee = wfee)
           this_P <- make_P_from_event_name(event, cands)
           out[[event]] <- list(integral = pp, P = this_P)
           # mirror event
           event <- str_c(x, w, "_", z, y)
-          cat(" | ", event, "\n")
+          if(reporting >= 2){cat(" | ", event, "\n")}
           this_P <- make_P_from_event_name(event, cands)
           out[[event]] <- list(integral = pp, P = this_P)
         }
@@ -231,6 +235,8 @@ round_0_pivot_probs <- function(sims, n = 1000){
   }
   out
 }
+
+PP_LIBRARY <- list()
 
 # initially all events had zero probability because cond1 could not be met -- was operating on frs and not ranks.
 
@@ -244,16 +250,23 @@ round_1_irv_pivot_prob <- function(sims, n = 1000, event = "D.AB_AC", wfee = NUL
   # assign candidate names to variables
   parse_1r_event_name(event)
   # get first rank shares and first rank ranks
-  frs <- get_first_rank_shares(sims %>% select(-id) %>% as.matrix())
-  ranks <- rank_mat(frs)
+  frs <- PP_LIBRARY[["frs"]]
+  if(is.null(frs)){frs <- get_first_rank_shares(sims %>% select(-id) %>% as.matrix()); PP_LIBRARY[["frs"]] <<- frs}
+  ranks <- PP_LIBRARY[["ranks"]]
+  if(is.null(ranks)){ranks <- rank_mat(frs); PP_LIBRARY[["ranks"]] <<- ranks}
   # condition 1: v is last in 0th round
   cond1 <- ranks[,v] == ncol(frs)
   if(noisy){cat("cond1 passed by ", sum(cond1, na.rm = T), " cases.\n")}
   # now we shift to the next round
   # condition 2: neither w nor x wins the first round
-  sims1 <- drop_candidate_and_condense(sims, cand_to_drop = v)
-  frs1 <- get_first_rank_shares(sims1 %>% select(-id) %>% as.matrix())
-  cond2 <- frs1[,w] != 1 & frs1[,x] != 1
+  sims1_v <- PP_LIBRARY[[str_c("sims_drop_", v)]]
+  if(is.null(sims1_v)){sims1_v <- drop_candidate_and_condense(sims, cand_to_drop = v); PP_LIBRARY[[str_c("sims_drop_", v)]] <<- sims1_v}
+  frs1_v <- PP_LIBRARY[[str_c("frs_drop_", v)]]
+  if(is.null(frs1_v)){frs1_v <- get_first_rank_shares(sims1_v %>% select(-id) %>% as.matrix()); PP_LIBRARY[[str_c("frs_drop_", v)]] <<- frs1_v}
+  ranks1_v <- PP_LIBRARY[[str_c("ranks_drop_", v)]]
+  if(is.null(ranks1_v)){ranks1_v <- rank_mat(frs1_v); PP_LIBRARY[[str_c("ranks_drop_", v)]] <<- ranks1_v}
+  cond2 <- ranks1_v[,w] != 1 & ranks1_v[,x] != 1
+  if(noisy){cat("cond2 passed by ", sum(cond2, na.rm = T), " cases.\n")}
   if(is.null(wfee)){
     # who would win given each elimination
     wfee <- get_winner_for_each_elimination(sims1)
@@ -266,9 +279,8 @@ round_1_irv_pivot_prob <- function(sims, n = 1000, event = "D.AB_AC", wfee = NUL
   if(noisy){cat("cond4 passed by ", sum(cond4, na.rm = T), " cases.\n")}
   cond <- cond1 & cond2 & cond3 & cond4
   if(sum(cond, na.rm = T) == 0){return(0)}
-  cat(".")
   # now compute density
-  w_vs_x <- frs1[,w] - frs1[,x]
+  w_vs_x <- frs1_v[,w] - frs1_v[,x]
   the_density <- try(density_estimate(x = w_vs_x[cond], eval.points = c(0)), silent = T)
   if(class(the_density) == "try-error"){
     msg <- geterrmessage()
@@ -278,9 +290,10 @@ round_1_irv_pivot_prob <- function(sims, n = 1000, event = "D.AB_AC", wfee = NUL
   mean(cond)*the_density*(1/n)
 }
 
-# this might be expanded to deal with multiple rounds
-round_1_pivot_probs <- function(sims, n = 1000){
+# this could be expanded to deal with multiple previous rounds
+round_1_pivot_probs <- function(sims, n = 1000, reporting = 1){
   out <- list()
+  PP_LIBRARY <<- list() # clear out by default -- slightly inefficient
   cands <- names(sims)[2] %>% str_split("") %>% .[[1]]
   # v.wx_yz restrictions: v is not w, x, y, or z. w is not z, x is not y, y is not z.
   for(v in cands){
@@ -294,13 +307,13 @@ round_1_pivot_probs <- function(sims, n = 1000){
           for(z in cands){
             if(y == z | w == z | v %in% c(w, x, y, z)){next}
             event <- str_c(v, ".", w, x, "_", y, z)
-            cat(event)
+            if(reporting >= 2){cat(event)}
             pp <- sims %>% round_1_irv_pivot_prob(n = n, event = event, wfee = wfee)
             this_P <- make_P_from_1r_event_name(event, cands)
             out[[event]] <- list(integral = pp, P = this_P)
             # mirror event
             event <- str_c(v, ".", x, w, "_", z, y)
-            cat(" | ", event, "\n")
+            if(reporting >= 2){cat(" | ", event, "\n")}
             this_P <- make_P_from_1r_event_name(event, cands)
             out[[event]] <- list(integral = pp, P = this_P)
           }
@@ -352,7 +365,7 @@ make_P_from_last_round_event_name <- function(event, cands = c("A", "B", "C", "D
   P
 }
 
-last_round_pivot_probs <- function(sims, n = 1000){
+last_round_pivot_probs <- function(sims, n = 1000, reporting = 1){
   cands <- names(sims)[2] %>% str_split("") %>% .[[1]]
   sims_last <- get_to_last_round(sims)
   sims_last %>%
@@ -366,12 +379,14 @@ last_round_pivot_probs <- function(sims, n = 1000){
   for(y in cands){
     for(z in cands[cands > y]){
       event <- str_c(y, z)
+      if(reporting >= 2){cat(event)}
       cond <- margins$y == y & margins$z == z
       the_density <- density_estimate(x = margins$y_vs_z[cond], eval.points = c(0))
       pp <- mean(cond)*the_density*(1/n)
       this_P <- make_P_from_last_round_event_name(event, cands)
       out[[event]] <- list(integral = pp, P = this_P)
       event <- str_c(z, y)
+      if(reporting >= 2){cat(" | ", event, "\n")}
       this_P <- make_P_from_last_round_event_name(event, cands)
       out[[event]] <- list(integral = pp, P = this_P)
     }
@@ -379,3 +394,23 @@ last_round_pivot_probs <- function(sims, n = 1000){
   out
 }
 
+irv_pivot_probs_four_cands <- function(sims, n = 1000, reporting = 1){
+  if(reporting >= 1){cat("Round 0: ")}
+  round_0 <- sims %>% round_0_pivot_probs(reporting = reporting)
+  if(reporting >= 1){cat("done.\nRound 1: ")}
+  round_1 <- sims %>% round_1_pivot_probs(reporting = reporting)
+  if(reporting >= 1){cat("done.\nRound 2: ")}
+  round_2 <- sims %>% last_round_pivot_probs(reporting = reporting)
+  if(reporting >= 1){cat("done.\n")}
+  c(round_0, round_1, round_2)
+}
+
+# sample usage
+# sims <- make_irv_sims(k = 4, n = 100000)
+# out <- irv_pivot_probs_four_cands(sims)
+# out %>% combine_P_matrices()
+
+# what can I test?
+# for 3 candidates, last_round_pivot_probs should be the same as en analytical, or mc.
+# for 3 candidates, round_0_pivot_probs should be the same as first round pivot probs via en or mc.
+# with an irrelevant fourth candidate D (essentially certain to lose), round_1_pivot_probs where D is eliminated (e.g. D.AB_AC) should be same as AB_AC in the three-candidate version without D.
