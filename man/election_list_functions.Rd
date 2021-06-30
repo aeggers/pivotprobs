@@ -3,12 +3,15 @@
 \name{election_list_functions}
 \alias{election_list_functions}
 \alias{plurality_election}
+\alias{pr_election}
 \alias{positional_election}
 \alias{irv_election}
 \alias{kemeny_young_election}
 \title{Create election list for analysis}
 \usage{
 plurality_election(n = 1000, k = 4, max_pivot_event_degree = 1)
+
+pr_election(n = 1000, M = 3)
 
 positional_election(n = 1000, s = 0.5)
 

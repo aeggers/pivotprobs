@@ -3,7 +3,7 @@ context("Plurality results via SC")
 test_that("Pivot probs in neutral case are equal across candidates", {
 
   plurality_sc <- plurality_election(k = 3) %>%
-    election_event_probs(method = "sc", alpha = c(5,5,5), tol = .1)
+    election_event_probs(method = "sc", alpha = c(5,5,5), tol = .1, skip_non_pivot_events = F)
 
   expect_equal(plurality_sc[["a_"]]$integral, 1/3, tolerance = .01)
   expect_equal(plurality_sc[["b_"]]$integral, 1/3, tolerance = .01)
@@ -18,7 +18,7 @@ test_that("Pivot probs in neutral case are equal across candidates", {
 test_that("Pivot probs in non-neutral case have reasonable ordering", {
 
   plurality_sc <- plurality_election(k = 3) %>%
-    election_event_probs(method = "sc", alpha = c(10,7,4), tol = .1)
+    election_event_probs(method = "sc", alpha = c(10,7,4), tol = .1, skip_non_pivot_events = F)
 
   expect_true(plurality_sc[["a_"]]$integral > plurality_sc[["b_"]]$integral)
   expect_true(plurality_sc[["b_"]]$integral > plurality_sc[["c_"]]$integral)
@@ -30,7 +30,7 @@ test_that("Pivot probs in non-neutral case have reasonable ordering", {
 test_that("Pivot probs in non-neutral case have reasonable ordering when drop_dimension", {
 
   plurality_sc <- plurality_election(k = 3) %>%
-    election_event_probs(method = "sc", drop_dimension = T, alpha = c(10,7,4), tol = .1)
+    election_event_probs(method = "sc", drop_dimension = T, alpha = c(10,7,4), tol = .1, skip_non_pivot_events = F)
 
   expect_true(plurality_sc[["a_"]]$integral > plurality_sc[["b_"]]$integral)
   expect_true(plurality_sc[["b_"]]$integral > plurality_sc[["c_"]]$integral)

@@ -68,7 +68,6 @@ brute_force_mc_eep <- function(num_sims = 10000000, batch_size = 500000, alpha =
 
 density_estimate <- function(x, bw_divisor = 1, eval.points = c(0)){
   if(length(x) <= 1){return(rep(0, length(eval.points)))} # can't get a bandwidth with only 1 point
-  cat("length: ", length(x)) # omit eventually
   bw <- ks::hpi(x, binned = T)/bw_divisor
   ks::kde(x = x, h = bw, eval.points = eval.points)$estimate
 }
@@ -348,9 +347,11 @@ irv_event_probs_from_sims <- function(sims, window = .01, n = 1000, s = 0, cand_
     integral = ab_pp[1],
     P = ab_P
   )
+  ba_P <- ab_P
+  ba_P[,7] <- c(0,1,0)
   out[[paste0(cand_names[2], sep, cand_names[1])]] <- list(
     integral = ab_pp[2],
-    P = ab_P
+    P = ba_P
   )
 
   # a_c and c_a
@@ -360,9 +361,11 @@ irv_event_probs_from_sims <- function(sims, window = .01, n = 1000, s = 0, cand_
     integral = ac_pp[1],
     P = ac_P
   )
+  ca_P <- ac_P
+  ca_P[,7] <- c(0,0,1)
   out[[paste0(cand_names[3], sep, cand_names[1])]] <- list(
     integral = ac_pp[2],
-    P = ac_P
+    P = ca_P
   )
 
   # b_c and c_b

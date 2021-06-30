@@ -13,14 +13,7 @@ a list of election events, each of which is a list with a probability
 (\code{integral}) and an event-specific P matrix (\code{P}).}
 }
 \description{
-Takes a list of election events and associated P matrices
-(as produced by \code{election_event_probs()} or standalone Monte Carlo
-functions) and combines
-them to produce a single  matrix (the P matrix) containing
-the probability of each election outcome (rows)
-as a function of the additional ballot (columns). If \code{u} is a vector
-of utilities (one per outcome), then t(P)%*%u gives the expected utility
-of each ballot.
+
 }
 \examples{
 plurality_election(k = 3) \%>\%

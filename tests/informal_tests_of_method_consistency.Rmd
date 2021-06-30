@@ -1,0 +1,132 @@
+---
+title: "Tests"
+author: "Andy Eggers"
+date: "6/29/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+devtools::load_all()
+```
+
+
+These are informal tests: make a plot; take a look. 
+
+
+## Consistency between methods for computing pivot probabilities for initial round 
+
+```{r make-sims}
+sims <- make_irv_sims(k = 3, n = 250000)
+```
+
+```{r use-old-way}
+
+mc3 <- irv_election() %>%
+  election_event_probs(method = "mc", sims = sims %>% select(-id) %>% as.matrix(), merge_adjacent_pivot_events = T)
+
+# harmonize the names -- this is annoying and sometime I should deal with it I guess.
+names(mc3) <- names(mc3) %>% toupper() %>% str_replace("_", "") %>% str_replace("\\|", "_")
+
+mc3 %>% map("integral") %>% unlist() -> integrals
+mc3_tib <- tibble(event = names(integrals), pp = integrals)
+```
+
+```{r use-new-way}
+mc3_2 <- sims %>% round_0_pivot_probs()
+
+mc3_2_tib <- tibble(event = names(mc3_2), pp = mc3_2 %>% map("integral") %>% unlist())
+```
+
+
+```{r combine-and-plot}
+
+combined_tib <- mc3_2_tib %>%
+  left_join(mc3_tib, by = "event", suffix = c("_2", "_1"))
+
+combined_tib %>%
+  ggplot(aes(x = pp_1, y = pp_2)) +
+  geom_point() +
+  geom_abline(intercept = 0, slope = 1, lty = 2) + 
+  labs(title = "Initial round pivot events")
+
+```
+
+```{r}
+combined_tib
+```
+
+## Consistency between methods for computing pivot probabilities for final round 
+
+```{r}
+mc3_2 <- sims %>% last_round_pivot_probs()
+
+mc3_2_tib <- tibble(event = names(mc3_2), pp = mc3_2 %>% map("integral") %>% unlist())
+```
+
+```{r}
+combined_tib <- mc3_2_tib %>%
+  left_join(mc3_tib, by = "event", suffix = c("_2", "_1"))
+
+combined_tib %>%
+  ggplot(aes(x = pp_1, y = pp_2)) +
+  geom_point() +
+  geom_abline(intercept = 0, slope = 1, lty = 2) + 
+  labs(title = "Final round pivot events")
+
+```
+
+## Consistency between first round pivot probs with 3 candidates and second round with irrelevant fourth candidate 
+
+With 4 candidates, one of whom always loses, we should get the same answer via 
+
+- D.AB_AB with the new method
+- eliminate D, then compute AB_AB with the old method.   
+
+```{r irrelevant-fourth}
+
+random_alpha <- sample(5:9, size = factorial(4), replace = T)
+random_alpha[c(18:24)] <- 1
+sims <- make_irv_sims(k = 4, n = 100000, alpha = random_alpha)
+
+# confirm that D always loses 
+sims %>% 
+  select(-id) %>% 
+  as.matrix() %>% 
+  get_first_rank_shares() %>% 
+  get_loser2() -> x
+table(x) # yup.
+
+# now drop D from all of them and condense
+sims3 <- sims %>% drop_candidate_and_condense("D")
+
+# compute using the old method
+mc3 <- irv_election() %>%
+  election_event_probs(method = "mc", sims = sims3 %>% select(-id) %>% as.matrix(), merge_adjacent_pivot_events = T)
+
+# reformat
+names(mc3) <- names(mc3) %>% toupper() %>% str_replace("_", "") %>% str_replace("\\|", "_")
+mc3 %>% map("integral") %>% unlist() -> integrals
+mc3_tib <- tibble(event = names(integrals), pp = integrals)
+
+# new method 
+sims %>% round_1_pivot_probs() -> x
+
+# sims %>% round_1_irv_pivot_prob(noisy = T) -> x2
+
+mc3_3_tib <- tibble(event = names(x), pp = x %>% map("integral") %>% unlist())
+
+mc3_3_tib %>% 
+  filter(str_detect(event, "^D")) %>% 
+  mutate(event = str_replace(event, "^D\\.", "")) %>% 
+  left_join(mc3_tib, by = "event", suffix = c("_2", "_1")) -> combined 
+
+combined %>% 
+  ggplot(aes(x = pp_1, y = pp_2)) + 
+  geom_point() + 
+  geom_abline(intercept = 0, slope = 1, lty = 2)
+```
+
+
+
