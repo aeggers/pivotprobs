@@ -13,7 +13,6 @@
 #' out %>% combine_P_matrices()
 #' @export
 irv_pivot_probs_four_cands <- function(sims, n = 1000, reporting = 1) {
-  container <- new.env()
 
   container$PP_LIBRARY <- list() ## warning: writes to global variable
   if (reporting >= 1) {
@@ -33,3 +32,6 @@ irv_pivot_probs_four_cands <- function(sims, n = 1000, reporting = 1) {
   }
   c(container$round_0, container$round_1, container$round_2)
 }
+
+# I want to set up the new env
+container <- new.env()
