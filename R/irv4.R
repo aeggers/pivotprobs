@@ -12,14 +12,26 @@
 #' out <- irv_pivot_probs_four_cands(sims)
 #' out %>% combine_P_matrices()
 #' @export
-irv_pivot_probs_four_cands <- function(sims, n = 1000, reporting = 1){
-  PP_LIBRARY <<- list()  ## warning: writes to global variable
-  if(reporting >= 1){cat("Round 0: ")}
-  round_0 <- sims %>% round_0_pivot_probs(reporting = reporting)
-  if(reporting >= 1){cat("done.\nRound 1: ")}
-  round_1 <- sims %>% round_1_pivot_probs(reporting = reporting)
-  if(reporting >= 1){cat("done.\nRound 2: ")}
-  round_2 <- sims %>% last_round_pivot_probs(reporting = reporting)
-  if(reporting >= 1){cat("done.\n")}
-  c(round_0, round_1, round_2)
+irv_pivot_probs_four_cands <- function(sims, n = 1000, reporting = 1) {
+
+  container$PP_LIBRARY <- list() ## warning: writes to global variable
+  if (reporting >= 1) {
+    cat("Round 0: ")
+  }
+  container$round_0 <- sims %>% round_0_pivot_probs(reporting = reporting)
+  if (reporting >= 1) {
+    cat("done.\nRound 1: ")
+  }
+  container$round_1 <- sims %>% round_1_pivot_probs(reporting = reporting)
+  if (reporting >= 1) {
+    cat("done.\nRound 2: ")
+  }
+  container$round_2 <- sims %>% last_round_pivot_probs(reporting = reporting)
+  if (reporting >= 1) {
+    cat("done.\n")
+  }
+  c(container$round_0, container$round_1, container$round_2)
 }
+
+# I want to set up the new env
+container <- new.env()
