@@ -97,26 +97,47 @@ round_0_irv_pivot_prob <- function(sims, n = 1000, event = "AB_CD", wfee = NULL,
   # assign candidate names to variables
   parse_event_name(event)
   # get first rank shares and first rank ranks
-  frs <- PP_LIBRARY[["frs"]]
-  if(is.null(frs)){frs <- get_first_rank_shares(sims %>% select(-id) %>% as.matrix()); PP_LIBRARY[["frs"]] <<- frs}
-  ranks <- PP_LIBRARY[["ranks"]]
-  if(is.null(ranks)){ranks <- rank_mat(frs); PP_LIBRARY[["ranks"]] <<- ranks}
+  frs <- container$PP_LIBRARY[["frs"]]
+  if (is.null(frs)) {
+    frs <- get_first_rank_shares(
+      sims %>%
+        select(-id) %>%
+        as.matrix()
+    )
+    container$PP_LIBRARY[["frs"]] <- frs
+  }
+  ranks <- container$PP_LIBRARY[["ranks"]]
+  if (is.null(ranks)) {
+    ranks <- rank_mat(frs)
+    container$PP_LIBRARY[["ranks"]] <<- ranks
+  }
   # condition 1: w and x in last two places
   cond1 <- ranks[,x] + ranks[,w] == 2*ncol(frs) - 1
-  if(noisy){cat("cond1 passed by ", sum(cond1, na.rm = T), " cases.\n")}
+  if (noisy) {
+    cat("cond1 passed by ", sum(cond1, na.rm = T), " cases.\n")
+  }
   if(is.null(wfee)){
     # who would win given each
     wfee <- get_winner_for_each_elimination(sims)
   }
   cond2 <- wfee[,x] == y
-  if(noisy){cat("cond2 passed by ", sum(cond2, na.rm = T), " cases.\n")}
+  if (noisy) {
+    cat("cond2 passed by ", sum(cond2, na.rm = T), " cases.\n")
+  }
   cond3 <- wfee[,w] == z
-  if(noisy){cat("cond3 passed by ", sum(cond3, na.rm = T), " cases.\n")}
+  if (noisy) {
+    cat("cond3 passed by ", sum(cond3, na.rm = T), " cases.\n")
+  }
   cond <- cond1 & cond2 & cond3
-  if(sum(cond, na.rm = T) == 0){return(0)}
+  if (sum(cond, na.rm = T) == 0) {
+    return(0)
+  }
   # now compute density
   w_vs_x <- frs[,w] - frs[,x]
-  the_density <- try(density_estimate(x = w_vs_x[cond], eval.points = c(0)), silent = T)
+  the_density <- try(
+    density_estimate(x = w_vs_x[cond], eval.points = c(0)),
+    silent = T
+  )
   if(class(the_density) == "try-error"){
     msg <- geterrmessage()
     cat("Error: ", msg, "-- setting density to zero.\n")
@@ -137,7 +158,7 @@ make_P_from_event_name <- function(event, cands = c("A", "B", "C", "D")){
 
 round_0_pivot_probs <- function(sims, n = 1000, reporting = 1){
   out <- list()
-  PP_LIBRARY <<- list() # clearing out by default
+  container$PP_LIBRARY <<- list() # clearing out by default
   wfee <- get_winner_for_each_elimination(sims)
   cands <- names(sims)[2] %>% str_split("") %>% .[[1]]
   for(w in cands){
@@ -164,7 +185,7 @@ round_0_pivot_probs <- function(sims, n = 1000, reporting = 1){
   out
 }
 
-PP_LIBRARY <- list()
+# PP_LIBRARY <- list()
 
 # initially all events had zero probability because cond1 could not be met -- was operating on frs and not ranks.
 
@@ -178,21 +199,44 @@ round_1_irv_pivot_prob <- function(sims, n = 1000, event = "D.AB_AC", wfee = NUL
   # assign candidate names to variables
   parse_1r_event_name(event)
   # get first rank shares and first rank ranks
-  frs <- PP_LIBRARY[["frs"]]
-  if(is.null(frs)){frs <- get_first_rank_shares(sims %>% select(-id) %>% as.matrix()); PP_LIBRARY[["frs"]] <<- frs}
-  ranks <- PP_LIBRARY[["ranks"]]
-  if(is.null(ranks)){ranks <- rank_mat(frs); PP_LIBRARY[["ranks"]] <<- ranks}
+  frs <- container$PP_LIBRARY[["frs"]]
+  if (is.null(frs)) {
+    frs <- get_first_rank_shares(
+      sims %>%
+        select(-id) %>%
+        as.matrix()
+    )
+    container$PP_LIBRARY[["frs"]] <- frs
+  }
+  ranks <- container$PP_LIBRARY[["ranks"]]
+  if (is.null(ranks)) {
+    ranks <- rank_mat(frs)
+    container$PP_LIBRARY[["ranks"]] <<- ranks
+  }
   # condition 1: v is last in 0th round
   cond1 <- ranks[,v] == ncol(frs)
-  if(noisy){cat("cond1 passed by ", sum(cond1, na.rm = T), " cases.\n")}
+  if (noisy) {
+    cat("cond1 passed by ", sum(cond1, na.rm = T), " cases.\n")
+  }
   # now we shift to the next round
   # condition 2: neither w nor x wins the first round
-  sims1_v <- PP_LIBRARY[[str_c("sims_drop_", v)]]
-  if(is.null(sims1_v)){sims1_v <- drop_candidate_and_condense(sims, cand_to_drop = v); PP_LIBRARY[[str_c("sims_drop_", v)]] <<- sims1_v}
-  frs1_v <- PP_LIBRARY[[str_c("frs_drop_", v)]]
-  if(is.null(frs1_v)){frs1_v <- get_first_rank_shares(sims1_v %>% select(-id) %>% as.matrix()); PP_LIBRARY[[str_c("frs_drop_", v)]] <<- frs1_v}
-  ranks1_v <- PP_LIBRARY[[str_c("ranks_drop_", v)]]
-  if(is.null(ranks1_v)){ranks1_v <- rank_mat(frs1_v); PP_LIBRARY[[str_c("ranks_drop_", v)]] <<- ranks1_v}
+  sims1_v <- container$PP_LIBRARY[[str_c("sims_drop_", v)]]
+  if (is.null(sims1_v)) {
+    sims1_v <- drop_candidate_and_condense(sims, cand_to_drop = v)
+    container$PP_LIBRARY[[str_c("sims_drop_", v)]] <- sims1_v
+  }
+  frs1_v <- container$PP_LIBRARY[[str_c("frs_drop_", v)]]
+  if (is.null(frs1_v)) {
+    frs1_v <- get_first_rank_shares(
+      sims1_v %>% select(-id) %>% as.matrix()
+    )
+    container$PP_LIBRARY[[str_c("frs_drop_", v)]] <- frs1_v
+  }
+  ranks1_v <- container$PP_LIBRARY[[str_c("ranks_drop_", v)]]
+  if (is.null(ranks1_v)) {
+    ranks1_v <- rank_mat(frs1_v)
+    container$PP_LIBRARY[[str_c("ranks_drop_", v)]] <- ranks1_v
+  }
   cond2 <- ranks1_v[,w] != 1 & ranks1_v[,x] != 1
   if(noisy){cat("cond2 passed by ", sum(cond2, na.rm = T), " cases.\n")}
   if(is.null(wfee)){
@@ -221,7 +265,7 @@ round_1_irv_pivot_prob <- function(sims, n = 1000, event = "D.AB_AC", wfee = NUL
 # this could be expanded to deal with multiple previous rounds
 round_1_pivot_probs <- function(sims, n = 1000, reporting = 1){
   out <- list()
-  PP_LIBRARY <<- list() # clear out by default -- slightly inefficient
+  container$PP_LIBRARY <<- list() # clear out by default -- slightly inefficient
   cands <- names(sims)[2] %>% str_split("") %>% .[[1]]
   # v.wx_yz restrictions: v is not w, x, y, or z. w is not z, x is not y, y is not z.
   for(v in cands){
