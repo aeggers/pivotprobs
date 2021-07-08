@@ -109,7 +109,7 @@ round_0_irv_pivot_prob <- function(sims, n = 1000, event = "AB_CD", wfee = NULL,
   ranks <- container$PP_LIBRARY[["ranks"]]
   if (is.null(ranks)) {
     ranks <- rank_mat(frs)
-    container$PP_LIBRARY[["ranks"]] <<- ranks
+    container$PP_LIBRARY[["ranks"]] <- ranks
   }
   # condition 1: w and x in last two places
   cond1 <- ranks[,x] + ranks[,w] == 2*ncol(frs) - 1
@@ -158,7 +158,7 @@ make_P_from_event_name <- function(event, cands = c("A", "B", "C", "D")){
 
 round_0_pivot_probs <- function(sims, n = 1000, reporting = 1){
   out <- list()
-  container$PP_LIBRARY <<- list() # clearing out by default
+  container$PP_LIBRARY <- list() # clearing out by default
   wfee <- get_winner_for_each_elimination(sims)
   cands <- names(sims)[2] %>% str_split("") %>% .[[1]]
   for(w in cands){
@@ -211,7 +211,7 @@ round_1_irv_pivot_prob <- function(sims, n = 1000, event = "D.AB_AC", wfee = NUL
   ranks <- container$PP_LIBRARY[["ranks"]]
   if (is.null(ranks)) {
     ranks <- rank_mat(frs)
-    container$PP_LIBRARY[["ranks"]] <<- ranks
+    container$PP_LIBRARY[["ranks"]] <- ranks
   }
   # condition 1: v is last in 0th round
   cond1 <- ranks[,v] == ncol(frs)
@@ -265,7 +265,7 @@ round_1_irv_pivot_prob <- function(sims, n = 1000, event = "D.AB_AC", wfee = NUL
 # this could be expanded to deal with multiple previous rounds
 round_1_pivot_probs <- function(sims, n = 1000, reporting = 1){
   out <- list()
-  container$PP_LIBRARY <<- list() # clear out by default -- slightly inefficient
+  container$PP_LIBRARY <- list() # clear out by default -- slightly inefficient
   cands <- names(sims)[2] %>% str_split("") %>% .[[1]]
   # v.wx_yz restrictions: v is not w, x, y, or z. w is not z, x is not y, y is not z.
   for(v in cands){
