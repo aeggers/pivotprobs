@@ -7,8 +7,7 @@
 #' @return A tibble with a column `id` and a column for each unique ballot type.
 #' @examples
 #' simulate_ordinal_results_from_dirichlet(n = 10)
-
-
+#' @export
 simulate_ordinal_results_from_dirichlet <- function(k = 4, n = 10000, alpha = NULL){
   stopifnot(k >= 3)
   if(is.null(alpha)){alpha <- sample(1:12, size = factorial(k), replace = T)}
