@@ -18,15 +18,15 @@ irv_pivot_probs_four_cands <- function(sims, n = 1000, reporting = 1) {
   if (reporting >= 1) {
     cat("Round 0: ")
   }
-  container$round_0 <- sims %>% round_0_pivot_probs(reporting = reporting)
+  container$round_0 <- sims %>% round_0_pivot_probs(n = n, reporting = reporting)
   if (reporting >= 1) {
     cat("done.\nRound 1: ")
   }
-  container$round_1 <- sims %>% round_1_pivot_probs(reporting = reporting)
+  container$round_1 <- sims %>% round_1_pivot_probs(n = n, reporting = reporting)
   if (reporting >= 1) {
     cat("done.\nRound 2: ")
   }
-  container$round_2 <- sims %>% last_round_pivot_probs(reporting = reporting)
+  container$round_2 <- sims %>% last_round_pivot_probs(n = n, reporting = reporting)
   if (reporting >= 1) {
     cat("done.\n")
   }
