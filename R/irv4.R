@@ -13,7 +13,7 @@
 #' out %>% combine_P_matrices()
 #' @export
 irv_pivot_probs_four_cands <- function(sims, n = 1000, reporting = 1) {
-
+  #
   container$PP_LIBRARY <- list() ## warning: writes to global variable
   if (reporting >= 1) {
     cat("Round 0: ")
