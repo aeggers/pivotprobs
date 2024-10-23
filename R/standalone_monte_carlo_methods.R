@@ -233,10 +233,14 @@ plurality_mc_accounting <- function(alpha = c(10, 9, 6), num_sims = 10000000, si
 
 #' @rdname standalone_monte_carlo_methods
 #' @export
-positional_event_probs_from_sims <- function(sims, window = .01, n = 1000, s = .5, cand_names = NULL, sep = "_", method = "density", merge = F, drop = F, increments = 10, bw_divisor = 1, skip_non_pivot_events = T, raw = F){
+positional_event_probs_from_sims <- function(sims, window = .01, n = 1000, s = .5, bullet_points = 0, cand_names = NULL, sep = "_", method = "density", merge = F, drop = F, increments = 10, bw_divisor = 1, skip_non_pivot_events = T, raw = F){
 
-  if(ncol(sims) != 6){
-    stop("sims must have 6 columns.")
+  if(ncol(sims) == 6){
+    sims <- cbind(sims, 0, 0, 0)
+  }
+
+  if(ncol(sims) != 9){
+    stop("sims must have 6 or 9 columns.")
   }
 
   if(is.null(cand_names)){
@@ -250,9 +254,9 @@ positional_event_probs_from_sims <- function(sims, window = .01, n = 1000, s = .
   # each row is a simulation, i.e. a set of ballot shares
 
   # assemble the scores
-  score_a <- sims[,1] + sims[,2] + s*(sims[,3] + sims[,5])
-  score_b <- sims[,3] + sims[,4] + s*(sims[,1] + sims[,6])
-  score_c <- sims[,5] + sims[,6] + s*(sims[,2] + sims[,4])
+  score_a <- sims[,1] + sims[,2] + s*(sims[,3] + sims[,5]) + bullet_points(sims[,8] + sims[,9])
+  score_b <- sims[,3] + sims[,4] + s*(sims[,1] + sims[,6]) + bullet_points(sims[,7] + sims[,9])
+  score_c <- sims[,5] + sims[,6] + s*(sims[,2] + sims[,4]) + bullet_points(sims[,7] + sims[,8])
 
   # go through the events
   out <- list()
@@ -311,31 +315,35 @@ positional_event_probs_from_sims <- function(sims, window = .01, n = 1000, s = .
 ### TODO: add drop method
 #' @rdname standalone_monte_carlo_methods
 #' @export
-irv_event_probs_from_sims <- function(sims, window = .01, n = 1000, s = 0, cand_names = NULL, sep = "_", method = "density", merge = F, bw_divisor = 1, skip_non_pivot_events = T){
+irv_event_probs_from_sims <- function(sims, window = .01, n = 1000, s = 0, bullet_points = 0, cand_names = NULL, sep = "_", method = "density", merge = F, bw_divisor = 1, skip_non_pivot_events = T){
 
-  if(ncol(sims) != 6){
-    stop("sims must have 6 columns.")
+  if(ncol(sims) == 6){
+    sims <- cbind(sims, 0, 0, 0)
+  }
+
+  if(ncol(sims) != 9){
+    stop("sims must have 6 or 9 columns.")
   }
 
   if(is.null(cand_names)){
-    cand_names <- names(sims)
+    cand_names <- names(sims) # this wouldn't really work for ranked methods because the column names would be like ABC
     if(is.null(cand_names)){
       cand_names <- letters[1:3]
     }
   }
 
-  # sims assumed to have columns abc, acb, bac, bca, cab, cba
+  # sims assumed to have columns abc, acb, bac, bca, cab, cba. optionally ax, bx, cx.
   # each row is a simulation, i.e. a set of ballot shares
 
   # positional scores
-  score_a <- sims[,1] + sims[,2] + s*(sims[,3] + sims[,5])
-  score_b <- sims[,3] + sims[,4] + s*(sims[,1] + sims[,6])
-  score_c <- sims[,5] + sims[,6] + s*(sims[,2] + sims[,4])
+  score_a <- sims[,1] + sims[,2] + s*(sims[,3] + sims[,5]) + bullet_points*(sims[,8] + sims[,9])
+  score_b <- sims[,3] + sims[,4] + s*(sims[,1] + sims[,6]) + bullet_points*(sims[,7] + sims[,9])
+  score_c <- sims[,5] + sims[,6] + s*(sims[,2] + sims[,4]) + bullet_points*(sims[,7] + sims[,8])
 
   # pairwise margins
-  a_vs_b <- 2*(sims[,1] + sims[,2] + sims[,5] - .5)
-  a_vs_c <- 2*(sims[,1] + sims[,2] + sims[,3] - .5)
-  b_vs_c <- 2*(sims[,3] + sims[,4] + sims[,1] - .5)
+  a_vs_b <- 2*(sims[,1] + sims[,2] + sims[,7] + sims[,5] - .5)
+  a_vs_c <- 2*(sims[,1] + sims[,2] + sims[,7] + sims[,3] - .5)
+  b_vs_c <- 2*(sims[,3] + sims[,4] + sims[,8] + sims[,1] - .5)
 
   out <- list()
 
@@ -612,20 +620,24 @@ condorcet_event_probs_from_sims <- function(sims, n = 1000, window = .01, cand_n
     cand_names <- letters[1:3]
   }
 
-  if(ncol(sims) != 6){
-    stop("sims must have 6 columns.")
+  if(ncol(sims) == 6){
+    sims <- cbind(sims, 0, 0, 0)
+  }
+
+  if(ncol(sims) != 9){
+    stop("sims must have 6 or 9 columns.")
   }
 
   if(method == "density"){method <- "naive_density"; bw_divisor = 1} # formerly undersmoothing this (bw_divisor = 2). trying without  # implementation of density is not yet correct, but naive_density works pretty well.
 
   # pairwise tallies: what each gets against each other
   # note this is different from meaning above
-  a_vs_b <- sims[,1] + sims[,2] + sims[,5]
-  a_vs_c <- sims[,1] + sims[,2] + sims[,3]
-  b_vs_a <- sims[,3] + sims[,4] + sims[,6]
-  b_vs_c <- sims[,3] + sims[,4] + sims[,1]
-  c_vs_a <- sims[,5] + sims[,6] + sims[,4]
-  c_vs_b <- sims[,5] + sims[,6] + sims[,2]
+  a_vs_b <- sims[,1] + sims[,2] + sims[,5] + sims[,7]
+  a_vs_c <- sims[,1] + sims[,2] + sims[,3] + sims[,7]
+  b_vs_a <- sims[,3] + sims[,4] + sims[,6] + sims[,8]
+  b_vs_c <- sims[,3] + sims[,4] + sims[,1] + sims[,8]
+  c_vs_a <- sims[,5] + sims[,6] + sims[,4] + sims[,9]
+  c_vs_b <- sims[,5] + sims[,6] + sims[,2] + sims[,9]
 
 
   out <- list()

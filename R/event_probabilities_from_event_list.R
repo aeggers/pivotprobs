@@ -24,7 +24,7 @@
 #' could be extended to handle other distributions (get in touch!).
 #' \item "mc" (or "MC" or "Monte Carlo") counts the proportion of simulated elections
 #' (supplied by the user or generated from user-supplied parameters) that satisfy
-#' election event conditions. Also slow (especially with large \code{num_sums}),
+#' election event conditions. Also slow (especially with large \code{num_sims}),
 #' but like "sc" can be sped up. Can generate simulations from Dirichlet or Logistic Normal belief distributions, or can be applied to any matrix of simulated elections
 #' supplied by the user.
 #' \item "ev" (or "EV" or "Eggers-Vivyan") uses numerical integration of the
